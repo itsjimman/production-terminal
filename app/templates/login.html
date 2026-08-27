@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in — ITSJIMMAN Production Hub</title>
+<script>(function(){try{var t=localStorage.getItem('ijh_theme');if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+<link rel="icon" type="image/png" href="{{ url_for('static', filename='img/favicon.png') }}">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+</head>
+<body class="login-body">
+  <form class="login-card" method="post" action="{{ url_for('auth.login', next=next) }}">
+    <div class="login-mark"><span class="glyph" aria-hidden="true"></span></div>
+    <h1>ITSJIMMAN</h1>
+    <p class="login-sub">Production Hub</p>
+    {% if error %}<div class="login-error">{{ error }}</div>{% endif %}
+    <div class="field">
+      <label for="username">Username</label>
+      <input id="username" name="username" type="text" placeholder="e.g. Jimman" autocomplete="username" autofocus required>
+    </div>
+    <div class="field">
+      <label for="password">Password</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" required>
+    </div>
+    <button class="btn btn-accent login-btn" type="submit">Sign in</button>
+  </form>
+</body>
+</html>

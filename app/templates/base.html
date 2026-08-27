@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ITSJIMMAN Production Hub</title>
+<script>(function(){try{var t=localStorage.getItem('ijh_theme');if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+<link rel="icon" type="image/png" href="{{ url_for('static', filename='img/favicon.png') }}">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+</head>
+<body>
+<div class="app">
+  <div class="rail">
+    <div class="rail-brand">
+      <div class="mark"><span class="glyph" aria-hidden="true"></span></div>
+      <div>
+        <div class="name">ITSJIMMAN</div>
+        <div class="sub">Production Hub</div>
+      </div>
+    </div>
+    <nav id="tabs">
+      <a class="tab-btn" data-tab="overview" href="/">Overview</a>
+      <a class="tab-btn" data-tab="productions" href="/productions">Productions</a>
+      <a class="tab-btn" data-tab="tasks" href="/tasks">Tasks</a>
+      <a class="tab-btn" data-tab="calendar" href="/calendar">Calendar</a>
+      {% if role == 'super_admin' %}<a class="tab-btn" data-tab="admin" href="/admin">Admin</a>{% endif %}
+    </nav>
+    <div class="rail-foot">
+      <button id="theme-toggle" class="theme-toggle-btn" type="button"></button>
+      <a class="viewer-display" href="/profile" title="Edit your profile">
+        {% if avatar %}
+          <img class="viewer-avatar viewer-avatar-img" src="{{ avatar }}" alt="">
+        {% else %}
+          <div class="viewer-avatar">{{ viewer_name[:1] | upper }}</div>
+        {% endif %}
+        <div>
+          <div class="viewer-name">{{ viewer_name }}</div>
+          <div class="viewer-role">{{ 'Super Admin' if role == 'super_admin' else 'Team member' }}</div>
+        </div>
+      </a>
+      <a class="rail-logout" href="/logout">Sign out</a>
+    </div>
+  </div>
+  <div class="main">
+    <div class="topbar">
+      <h1 id="page-title">{{ active_tab | capitalize }}</h1>
+      <div class="spacer"></div>
+      <div id="topbar-actions"></div>
+    </div>
+    <div class="content" id="content">
+      <div class="skeleton-grid">
+        <div class="skeleton-card"></div><div class="skeleton-card"></div>
+        <div class="skeleton-card"></div><div class="skeleton-card"></div>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="overlay-root"></div>
+<div id="toast-stack" class="toast-stack"></div>
+<script>
+  window.__ACTIVE_TAB__ = {{ active_tab | tojson }};
+  window.__VIEWER_NAME__ = {{ viewer_name | tojson }};
+  window.__ROLE__ = {{ role | tojson }};
+</script>
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
