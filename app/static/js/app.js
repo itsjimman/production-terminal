@@ -58,6 +58,28 @@
   function fmtAssignees(list) {
     return (list && list.length) ? list.join(", ") : "";
   }
+  function avatarTone(name) {
+    var s = String(name || ""), hash = 0;
+    for (var i = 0; i < s.length; i++) hash = (hash * 31 + s.charCodeAt(i)) >>> 0;
+    return hash % 6;
+  }
+  function findMember(name) {
+    return STATE.team.filter(function (m) { return m.name === name; })[0];
+  }
+  function avatarChipHtml(name) {
+    var m = findMember(name);
+    if (m && m.avatar) return '<img class="avatar-chip" src="' + esc(m.avatar) + '" alt="">';
+    var initial = (name || "?").trim().charAt(0).toUpperCase() || "?";
+    return '<span class="avatar-chip avatar-tone-' + avatarTone(name) + '">' + esc(initial) + '</span>';
+  }
+  function personChip(name) {
+    if (!name) return "";
+    return '<span class="person-chip">' + avatarChipHtml(name) + '<span>' + esc(name) + '</span></span>';
+  }
+  function personList(names) {
+    if (!names || !names.length) return "";
+    return '<div class="person-list-inline">' + names.map(personChip).join("") + '</div>';
+  }
   function fmtTime(hhmm) {
     if (!hhmm) return "";
     var parts = hhmm.split(":");
@@ -548,7 +570,7 @@
       '<div class="cell-sub">' + esc(p.type) + (p.budget ? " · Budget " + fmtMoney(p.budget) : "") + '</div></td>';
     row += '<td>' + statusSelect("set-production-status", p.id, p.status, STATE.constants.productionStatuses, PRODUCTION_STATUS_TONE) + '</td>';
     row += '<td>' + fmtDate(p.shootDate) + (fmtTimeRange(p.shootTimeStart, p.shootTimeEnd) ? '<div class="cell-sub">' + fmtTimeRange(p.shootTimeStart, p.shootTimeEnd) + '</div>' : '') + '</td>';
-    row += '<td>' + (p.crew.length ? p.crew.map(esc).join(", ") : '<span class="cell-sub">—</span>') + '</td>';
+    row += '<td>' + (p.crew.length ? personList(p.crew) : '<span class="cell-sub">—</span>') + '</td>';
     row += '<td><div class="link-row">' +
       (p.driveLink ? '<a class="link-chip" href="' + esc(p.driveLink) + '" target="_blank" rel="noopener">' + ICONS.link + ' Drive</a>' : '') +
       (p.briefLink ? '<a class="link-chip" href="' + esc(p.briefLink) + '" target="_blank" rel="noopener">' + ICONS.link + ' Brief</a>' : '') +
@@ -703,7 +725,7 @@
       '<button class="link-title" data-action="toggle-task-row" data-id="' + t.id + '">' + esc(t.title) + '</button>' +
       (t.subtasks.length ? '<div class="cell-sub">' + done + "/" + t.subtasks.length + ' subtasks</div>' : '') + '</td>';
     html += '<td>' + (t.productionName ? esc(t.productionName) : '<span class="cell-sub">—</span>') + '</td>';
-    html += '<td>' + (t.assignees.length ? esc(fmtAssignees(t.assignees)) : '<span class="cell-sub">Unassigned</span>') + '</td>';
+    html += '<td>' + (t.assignees.length ? personList(t.assignees) : '<span class="cell-sub">Unassigned</span>') + '</td>';
     html += '<td>' + (t.createdBy ? esc(t.createdBy) : '<span class="cell-sub">—</span>') + '</td>';
     html += '<td' + (overdue ? ' style="color:var(--danger);font-weight:600;"' : '') + '>' + fmtDate(t.dueDate) + (overdue ? ' (overdue)' : '') + '</td>';
     html += '<td>' + statusPill(t.status, TASK_STATUS_TONE) + '</td>';
@@ -774,7 +796,7 @@
     if (!ADMIN_USERS.length) { html += '<div class="table-wrap"><div class="empty-row">No team members yet.</div></div>'; return html; }
     html += '<div class="table-wrap"><table class="tbl-admin-users"><thead><tr><th>Name</th><th>Username</th><th>Role</th><th>Last signed in</th><th></th></tr></thead><tbody>';
     ADMIN_USERS.forEach(function (u) {
-      html += '<tr><td><div class="cell-title">' + esc(u.name) + '</div></td>';
+      html += '<tr><td><div class="cell-title">' + personChip(u.name) + '</div></td>';
       html += '<td>' + (u.hasLogin ? '<span class="mono">' + esc(u.username) + '</span>' : '<span class="cell-sub">No login</span>') + '</td>';
       html += '<td>' + (u.role === "super_admin" ? statusPill("Super Admin", { "Super Admin": "accent" }) : statusPill("Member", { "Member": "neutral" })) + '</td>';
       html += '<td>' + (u.lastLoginAt ? fmtDateTime(u.lastLoginAt) : '<span class="cell-sub">Never</span>') + '</td>';
@@ -800,7 +822,7 @@
       var LOG_ACTION_TONE = { created: "good", updated: "info", deleted: "danger" };
       ADMIN_LOG.forEach(function (entry) {
         html += '<tr><td>' + fmtDateTime(entry.createdAt) + '</td>';
-        html += '<td>' + esc(entry.actor) + '</td>';
+        html += '<td>' + personChip(entry.actor) + '</td>';
         html += '<td>' + statusPill(entry.action, LOG_ACTION_TONE) + '</td>';
         html += '<td><div class="cell-title">' + esc(entry.entityLabel) + '</div><div class="cell-sub">' + esc(entry.entityType) + '</div></td>';
         html += '<td>' + (entry.detail ? esc(entry.detail) : '<span class="cell-sub">—</span>') + '</td></tr>';
@@ -925,7 +947,7 @@
       var registeredUsers = STATE.team.filter(function (m) { return m.hasLogin; });
       html += '<div class="check-grid" data-field="' + f.key + '">' + registeredUsers.map(function (m) {
         var checked = (val || []).indexOf(m.name) > -1;
-        return '<label class="check-pill"><input type="checkbox" value="' + esc(m.name) + '"' + (checked ? ' checked' : '') + '>' + esc(m.name) + '</label>';
+        return '<label class="check-pill"><input type="checkbox" value="' + esc(m.name) + '"' + (checked ? ' checked' : '') + '>' + avatarChipHtml(m.name) + esc(m.name) + '</label>';
       }).join("") + '</div>';
       if (!registeredUsers.length) html += '<div class="field-hint">No one has a login yet — add users from the Admin page.</div>';
     } else if (f.type === "brand-select") {
@@ -945,9 +967,9 @@
       var pending = modalState.pendingCrew || [];
       html += '<div class="check-grid" data-field="' + f.key + '">' + STATE.team.map(function (m) {
         var checked = (val || []).indexOf(m.name) > -1;
-        return '<label class="check-pill"><input type="checkbox" value="' + esc(m.name) + '"' + (checked ? ' checked' : '') + '>' + esc(m.name) + '</label>';
+        return '<label class="check-pill"><input type="checkbox" value="' + esc(m.name) + '"' + (checked ? ' checked' : '') + '>' + avatarChipHtml(m.name) + esc(m.name) + '</label>';
       }).join("") + pending.map(function (n) {
-        return '<label class="check-pill"><input type="checkbox" value="' + esc(n) + '" checked>' + esc(n) + '</label>';
+        return '<label class="check-pill"><input type="checkbox" value="' + esc(n) + '" checked>' + avatarChipHtml(n) + esc(n) + '</label>';
       }).join("") + '</div>';
       html += '<div class="team-add"><input type="text" placeholder="Add more…" data-role="crew-add-input"><button class="btn btn-sm" type="button" data-action="crew-add-confirm">' + ICONS.plus + '</button></div>';
     } else if (f.type === "textarea") {

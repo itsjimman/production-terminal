@@ -35,7 +35,7 @@ class TeamMember(db.Model):
         return bool(self.password_hash) and check_password_hash(self.password_hash, password)
 
     def to_dict(self):
-        return {"id": self.id, "name": self.name, "hasLogin": bool(self.username)}
+        return {"id": self.id, "name": self.name, "hasLogin": bool(self.username), "avatar": self.avatar_data}
 
     def to_admin_dict(self):
         return {
@@ -45,6 +45,7 @@ class TeamMember(db.Model):
             "role": self.role,
             "hasLogin": bool(self.username),
             "lastLoginAt": self.last_login_at.isoformat() if self.last_login_at else None,
+            "avatar": self.avatar_data,
         }
 
     def to_profile_dict(self):
