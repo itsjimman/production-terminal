@@ -9,10 +9,10 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 from .auth import admin_required, login_required
 from .constants import (
     PRODUCTION_STATUSES, PRODUCTION_TYPES, TASK_STATUSES, TASK_PRIORITIES,
-    EXPENSE_CATEGORIES, EXPENSE_STATUSES,
+    EXPENSE_CATEGORIES, EXPENSE_STATUSES, POST_PRO_STAGES, infer_post_pro_media_type,
 )
 from .export import build_export_workbook
-from .models import db, TeamMember, Production, Task, Subtask, Expense, AuditLog
+from .models import db, TeamMember, Production, Task, Subtask, Expense, AuditLog, PostProItem
 
 bp = Blueprint("api", __name__)
 
@@ -85,6 +85,21 @@ def get_or_create_member(name):
     return member
 
 
+def ensure_post_pro_item(production):
+    """A production entering Editing gets a Post Pro tracking item exactly
+    once — re-entering Editing later (e.g. after a Revision bounce-back)
+    doesn't create a second one."""
+    existing = PostProItem.query.filter_by(production_id=production.id).first()
+    if existing:
+        return
+    media_type = infer_post_pro_media_type(production.type)
+    db.session.add(PostProItem(
+        production_id=production.id,
+        media_type=media_type,
+        stage=POST_PRO_STAGES[media_type][0],
+    ))
+
+
 def process_avatar(data_uri):
     """Decode an uploaded image (any common format), square-crop it, and
     re-encode as a small JPEG data: URI so avatars stay cheap to store and
@@ -115,6 +130,7 @@ def bootstrap():
     tasks = Task.query.order_by(Task.created_at.desc()).all()
     expenses = Expense.query.order_by(Expense.date.desc().nullslast(), Expense.created_at.desc()).all()
     team = TeamMember.query.order_by(TeamMember.name.asc()).all()
+    post_pro = PostProItem.query.order_by(PostProItem.deadline.asc().nullslast(), PostProItem.created_at.desc()).all()
     return {
         "meta": {
             "studioName": current_app.config["STUDIO_NAME"],
@@ -127,11 +143,13 @@ def bootstrap():
             "taskPriorities": TASK_PRIORITIES,
             "expenseCategories": EXPENSE_CATEGORIES,
             "expenseStatuses": EXPENSE_STATUSES,
+            "postProStages": POST_PRO_STAGES,
         },
         "team": [m.to_dict() for m in team],
         "productions": [p.to_dict(include_children=True) for p in productions],
         "tasks": [t.to_dict() for t in tasks],
         "expenses": [e.to_dict() for e in expenses],
+        "postPro": [i.to_dict() for i in post_pro],
     }
 
 
@@ -183,6 +201,9 @@ def create_production():
         if member:
             p.crew.append(member)
     db.session.add(p)
+    db.session.flush()
+    if p.status == "Editing":
+        ensure_post_pro_item(p)
     log_change("created", "Production", f"{p.client} — {p.shoot_name}")
     db.session.commit()
     return ok(201)
@@ -199,6 +220,8 @@ def update_production(pid):
     p.shoot_name = body["shootName"].strip()
     p.type = body.get("type") or p.type
     p.status = body.get("status") or p.status
+    if p.status == "Editing":
+        ensure_post_pro_item(p)
     p.shoot_date = parse_date(body.get("shootDate"))
     p.shoot_time_start = parse_time(body.get("shootTimeStart"))
     p.shoot_time_end = parse_time(body.get("shootTimeEnd"))
@@ -243,6 +266,8 @@ def set_production_status(pid):
         return bad("Not a valid production status.")
     old_status = p.status
     p.status = status
+    if status == "Editing":
+        ensure_post_pro_item(p)
     log_change("updated", "Production", f"{p.client} — {p.shoot_name}", detail=f"Status: {old_status} → {status}")
     db.session.commit()
     return ok()
@@ -433,6 +458,83 @@ def set_expense_status(eid):
     old_status = e.status
     e.status = status
     log_change("updated", "Expense", e.description, detail=f"Status: {old_status} → {status}")
+    db.session.commit()
+    return ok()
+
+
+# ---------- post pro ----------
+
+def valid_post_pro_body(body):
+    media_type = body.get("mediaType") if body.get("mediaType") in POST_PRO_STAGES else "Photo"
+    stage = body.get("stage") if body.get("stage") in POST_PRO_STAGES[media_type] else POST_PRO_STAGES[media_type][0]
+    return media_type, stage
+
+
+@bp.route("/post-pro", methods=["POST"])
+@login_required
+def create_post_pro():
+    body = request.json or {}
+    if not str(body.get("productionId") or "").strip():
+        return bad("A linked production is required.")
+    production = Production.query.get_or_404(int(body["productionId"]))
+    if PostProItem.query.filter_by(production_id=production.id).first():
+        return bad("This production is already in Post Pro.")
+    media_type, stage = valid_post_pro_body(body)
+    item = PostProItem(
+        production_id=production.id,
+        media_type=media_type,
+        stage=stage,
+        frames_per_batch=parse_int(body.get("framesPerBatch")),
+        videos_per_batch=parse_int(body.get("videosPerBatch")),
+        deadline=parse_date(body.get("deadline")),
+        notes=body.get("notes") or None,
+    )
+    db.session.add(item)
+    log_change("created", "Post Pro", f"{production.client} — {production.shoot_name}")
+    db.session.commit()
+    return ok(201)
+
+
+@bp.route("/post-pro/<int:item_id>", methods=["PUT"])
+@login_required
+def update_post_pro(item_id):
+    item = PostProItem.query.get_or_404(item_id)
+    body = request.json or {}
+    media_type, stage = valid_post_pro_body(body)
+    item.media_type = media_type
+    item.stage = stage
+    item.frames_per_batch = parse_int(body.get("framesPerBatch"))
+    item.videos_per_batch = parse_int(body.get("videosPerBatch"))
+    item.deadline = parse_date(body.get("deadline"))
+    item.notes = body.get("notes") or None
+    label = f"{item.production.client} — {item.production.shoot_name}" if item.production else "Post Pro item"
+    log_change("updated", "Post Pro", label)
+    db.session.commit()
+    return ok()
+
+
+@bp.route("/post-pro/<int:item_id>", methods=["DELETE"])
+@login_required
+def delete_post_pro(item_id):
+    item = PostProItem.query.get_or_404(item_id)
+    label = f"{item.production.client} — {item.production.shoot_name}" if item.production else "Post Pro item"
+    db.session.delete(item)
+    log_change("deleted", "Post Pro", label)
+    db.session.commit()
+    return ok()
+
+
+@bp.route("/post-pro/<int:item_id>/stage", methods=["PATCH"])
+@login_required
+def set_post_pro_stage(item_id):
+    item = PostProItem.query.get_or_404(item_id)
+    stage = (request.json or {}).get("stage")
+    if stage not in POST_PRO_STAGES[item.media_type]:
+        return bad("Not a valid stage for this item's media type.")
+    old_stage = item.stage
+    item.stage = stage
+    label = f"{item.production.client} — {item.production.shoot_name}" if item.production else "Post Pro item"
+    log_change("updated", "Post Pro", label, detail=f"Stage: {old_stage} → {stage}")
     db.session.commit()
     return ok()
 

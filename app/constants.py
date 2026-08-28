@@ -23,6 +23,24 @@ TASK_STATUS_TONE = {"To Do": "neutral", "In Progress": "info", "Done": "good"}
 TASK_PRIORITIES = ["Low", "Normal", "High"]
 TASK_PRIORITY_TONE = {"Low": "neutral", "Normal": "info", "High": "danger"}
 
+POST_PRO_STAGES = {
+    "Photo": ["Selections", "Color", "Retouch", "Revision", "Delivered"],
+    "Video": ["Color Sample", "Rough Cut", "Revision", "Delivered"],
+}
+POST_PRO_STAGE_TONE = {
+    "Selections": "neutral", "Color": "info", "Color Sample": "info",
+    "Retouch": "accent", "Rough Cut": "accent", "Revision": "danger",
+    "Delivered": "good",
+}
+
+
+def infer_post_pro_media_type(production_type):
+    """Photography/Catalog shoots default to the photo pipeline, Videography
+    to the video pipeline. Anything else (Full Production, Events, Personal)
+    could be either, so it defaults to Photo but stays editable per item."""
+    return "Video" if "Videography" in (production_type or "") else "Photo"
+
+
 EXPENSE_CATEGORIES = [
     "Transport", "Model Payment", "Location Payment",
     "Vendor / Crew Payment", "Equipment Rental", "Catering", "Other",

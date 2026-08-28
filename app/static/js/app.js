@@ -25,11 +25,18 @@
     "Shooting": "accent", "Editing": "accent", "Review": "accent",
     "Delivered": "good", "Cancelled": "danger"
   };
+  var POST_PRO_STAGE_TONE = {
+    "Selections": "neutral", "Color": "info", "Color Sample": "info",
+    "Retouch": "accent", "Rough Cut": "accent", "Revision": "danger",
+    "Delivered": "good"
+  };
+  var POST_PRO_MEDIA_TONE = { "Photo": "info", "Video": "accent" };
 
   var TABS = [
     { key: "overview", label: "Overview", path: "/" },
     { key: "productions", label: "Productions", path: "/productions" },
     { key: "tasks", label: "Tasks", path: "/tasks" },
+    { key: "post-pro", label: "Post Pro", path: "/post-pro" },
     { key: "calendar", label: "Calendar", path: "/calendar" },
     { key: "admin", label: "Admin", path: "/admin" },
     { key: "profile", label: "My Profile", path: "/profile" }
@@ -130,13 +137,13 @@
   }
 
   /* ---------- state ---------- */
-  var STATE = { meta: {}, constants: {}, team: [], productions: [], tasks: [], expenses: [] };
+  var STATE = { meta: {}, constants: {}, team: [], productions: [], tasks: [], expenses: [], postPro: [] };
   var UI = {
     tab: window.__ACTIVE_TAB__ || "overview",
     expandedProductions: {},
     expandedTasks: {},
     expandedStat: null,
-    calendar: (function () { var d = new Date(); return { year: d.getFullYear(), month: d.getMonth() }; })(),
+    calendar: (function () { var d = new Date(); return { year: d.getFullYear(), month: d.getMonth(), show: { shoots: true, postPro: true, tasks: true } }; })(),
     search: { productions: "", tasks: "" },
     statusFilter: { productions: "All", tasks: "All" },
     assigneeFilter: { tasks: "All" },
@@ -147,6 +154,7 @@
   var modalState = null;
   var confirmState = null;
   var adminModal = null;
+  var postProModal = null;
   var ADMIN_USERS = null;
   var ADMIN_LOG = null;
   var busy = false;
@@ -401,6 +409,7 @@
     if (UI.tab === "overview") content.innerHTML = renderOverview();
     else if (UI.tab === "productions") { content.innerHTML = renderProductions(); actions.innerHTML = '<button class="btn btn-accent" data-action="new-production">' + ICONS.plus + ' New production</button>'; }
     else if (UI.tab === "tasks") { content.innerHTML = renderTasksTab(); actions.innerHTML = '<button class="btn btn-accent" data-action="new-task">' + ICONS.plus + ' New task</button>'; }
+    else if (UI.tab === "post-pro") { content.innerHTML = renderPostProTab(); actions.innerHTML = '<button class="btn btn-accent" data-action="new-post-pro">' + ICONS.plus + ' Add to Post Pro</button>'; }
     else if (UI.tab === "calendar") content.innerHTML = renderCalendarTab();
     else if (UI.tab === "admin") {
       content.innerHTML = renderAdminTab();
@@ -738,25 +747,175 @@
     return html;
   }
 
+  /* ---------- post pro ---------- */
+  function renderPostProTab() {
+    var list = STATE.postPro;
+    var html = '<div class="section-head"><div><p>Productions in post-production, tracked from first pass through delivery. Productions land here automatically once their status is set to Editing.</p></div></div>';
+    if (!list.length) { html += '<div class="table-wrap"><div class="empty-row">Nothing in Post Pro yet.</div></div>'; return html; }
+    html += '<div class="table-wrap"><table class="tbl-post-pro"><thead><tr><th>Production</th><th>Media</th><th>Stage</th><th>Batch</th><th>Deadline</th><th></th></tr></thead><tbody>';
+    list.forEach(function (item) { html += renderPostProRow(item); });
+    html += '</tbody></table></div>';
+    return html;
+  }
+  function renderPostProRow(item) {
+    var d = daysUntil(item.deadline);
+    var overdue = d !== null && d < 0 && item.stage !== "Delivered";
+    var batch = item.mediaType === "Video"
+      ? (item.videosPerBatch ? item.videosPerBatch + ' videos/batch' : '<span class="cell-sub">—</span>')
+      : (item.framesPerBatch ? item.framesPerBatch + ' frames/batch' : '<span class="cell-sub">—</span>');
+    var stages = (STATE.constants.postProStages && STATE.constants.postProStages[item.mediaType]) || [item.stage];
+    var row = '<tr><td><button class="link-title" data-action="open-production" data-id="' + item.productionId + '">' + esc(item.productionName || "—") + '</button></td>';
+    row += '<td>' + statusPill(item.mediaType, POST_PRO_MEDIA_TONE) + '</td>';
+    row += '<td>' + statusSelect("set-post-pro-stage", item.id, item.stage, stages, POST_PRO_STAGE_TONE) + '</td>';
+    row += '<td>' + batch + '</td>';
+    row += '<td' + (overdue ? ' style="color:var(--danger);font-weight:600;"' : '') + '>' + fmtDate(item.deadline) + (overdue ? ' (overdue)' : '') + '</td>';
+    row += '<td><div class="row-actions"><button class="icon-btn" title="Edit" data-action="edit-post-pro" data-id="' + item.id + '">' + ICONS.edit + '</button><button class="icon-btn" title="Delete" data-action="delete-post-pro" data-id="' + item.id + '">' + ICONS.trash + '</button></div></td></tr>';
+    if (item.notes) {
+      row += '<tr class="expand-row"><td colspan="6"><div class="expand-body" style="padding:10px 16px;white-space:pre-wrap;">' + esc(item.notes) + '</div></td></tr>';
+    }
+    return row;
+  }
+
+  function renderPostProModal() {
+    var v = postProModal.values;
+    var isNew = !postProModal.id;
+    var stages = (STATE.constants.postProStages && STATE.constants.postProStages[v.mediaType]) || [];
+    var eligibleProductions = STATE.productions.filter(function (p) {
+      if (p.status !== "Editing") return false;
+      if (!isNew) return true;
+      return !STATE.postPro.some(function (item) { return item.productionId === p.id; });
+    });
+    var html = '<div class="modal-overlay" data-action="overlay-close"><div class="modal" data-stop>' +
+      '<div class="modal-head"><h2>' + (isNew ? "Add to Post Pro" : "Edit Post Pro item") + '</h2><button class="icon-btn" data-action="post-pro-modal-close">' + ICONS.close + '</button></div>' +
+      '<div class="modal-body">';
+
+    html += '<div class="field"><label class="field-req">Production</label>';
+    if (isNew) {
+      html += '<select data-field="productionId"><option value="">Select a production…</option>' +
+        eligibleProductions.map(function (p) {
+          return '<option value="' + p.id + '"' + (String(p.id) === String(v.productionId) ? ' selected' : '') + '>' + esc(p.client + ' — ' + p.shootName) + '</option>';
+        }).join("") + '</select>';
+      if (!eligibleProductions.length) html += '<div class="field-hint">No eligible productions — only ones currently in the Editing stage (and not already in Post Pro) show here.</div>';
+    } else {
+      var prod = byId(STATE.productions, v.productionId);
+      html += '<div class="cell-title" style="padding:8px 0;">' + esc(prod ? (prod.client + ' — ' + prod.shootName) : "") + '</div>';
+    }
+    html += '</div>';
+
+    html += '<div class="field"><label>Media type</label><select data-field="mediaType">' +
+      ["Photo", "Video"].map(function (m) { return '<option value="' + m + '"' + (m === v.mediaType ? ' selected' : '') + '>' + m + '</option>'; }).join("") +
+      '</select></div>';
+
+    html += '<div class="field"><label>Stage</label><select data-field="stage">' +
+      stages.map(function (s) { return '<option value="' + esc(s) + '"' + (s === v.stage ? ' selected' : '') + '>' + esc(s) + '</option>'; }).join("") +
+      '</select></div>';
+
+    if (v.mediaType === "Video") {
+      html += '<div class="field"><label>Amount of videos per batch</label><input type="number" data-field="videosPerBatch" placeholder="e.g. 3" value="' + esc(v.videosPerBatch) + '"></div>';
+    } else {
+      html += '<div class="field"><label>Frames per batch</label><input type="number" data-field="framesPerBatch" placeholder="e.g. 20" value="' + esc(v.framesPerBatch) + '"></div>';
+    }
+
+    html += '<div class="field"><label>Deadline</label><input type="date" data-field="deadline" value="' + esc(v.deadline) + '"></div>';
+    html += '<div class="field"><label>Notes</label><textarea data-field="notes">' + esc(v.notes) + '</textarea></div>';
+    html += '</div>';
+    html += '<div class="modal-foot"><button class="btn btn-ghost" data-action="post-pro-modal-close">Cancel</button><button class="btn btn-accent" data-action="post-pro-modal-submit">' + (isNew ? "Add" : "Save changes") + '</button></div>';
+    html += '</div></div>';
+    return html;
+  }
+  function collectPostProFormValues() {
+    var values = Object.assign({}, postProModal.values);
+    ["productionId", "mediaType", "stage", "framesPerBatch", "videosPerBatch", "deadline", "notes"].forEach(function (key) {
+      var el = document.querySelector('[data-field="' + key + '"]');
+      if (el) values[key] = el.value;
+    });
+    return values;
+  }
+  function bindPostProModalEvents() {
+    document.querySelectorAll('[data-action="overlay-close"], [data-action="post-pro-modal-close"]').forEach(function (el) {
+      el.addEventListener("click", function () { postProModal = null; renderOverlay(); });
+    });
+    document.querySelectorAll('[data-stop]').forEach(function (el) { el.addEventListener("click", function (e) { e.stopPropagation(); }); });
+    var mediaSelect = document.querySelector('[data-field="mediaType"]');
+    if (mediaSelect) mediaSelect.addEventListener("change", function () {
+      postProModal.values = collectPostProFormValues();
+      postProModal.values.mediaType = mediaSelect.value;
+      postProModal.values.stage = (STATE.constants.postProStages[mediaSelect.value] || [])[0] || "";
+      renderOverlay();
+    });
+    var submitBtn = document.querySelector('[data-action="post-pro-modal-submit"]');
+    if (submitBtn) submitBtn.addEventListener("click", function () {
+      var values = collectPostProFormValues();
+      if (!values.productionId) { toast("Please select a production."); return; }
+      var url = "/api/post-pro" + (postProModal.id ? "/" + postProModal.id : "");
+      var method = postProModal.id ? "PUT" : "POST";
+      var successMsg = postProModal.id ? "Post Pro item updated." : "Added to Post Pro.";
+      postProModal = null;
+      renderOverlay();
+      mutate(url, method, values, successMsg);
+    });
+  }
+
   /* ---------- calendar ---------- */
   function renderCalendarTab() {
     var y = UI.calendar.year, m = UI.calendar.month;
+    var show = UI.calendar.show;
     var first = new Date(y, m, 1);
     var startDow = first.getDay();
     var daysInMonth = new Date(y, m + 1, 0).getDate();
     var todayIso = isoDate(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
 
     var byDate = {};
-    STATE.productions.forEach(function (p) {
-      if (!p.shootDate) return;
-      (byDate[p.shootDate] = byDate[p.shootDate] || []).push(p);
-    });
-    Object.keys(byDate).forEach(function (d) {
-      byDate[d].sort(function (a, b) { return (a.shootTimeStart || "99:99") < (b.shootTimeStart || "99:99") ? -1 : 1; });
-    });
-    var noDate = STATE.productions.filter(function (p) { return !p.shootDate; });
+    function plot(date, entry) { (byDate[date] = byDate[date] || []).push(entry); }
 
-    var html = '<div class="section-head"><div><p>Shoots plotted by date.</p></div></div>';
+    if (show.shoots) {
+      STATE.productions.forEach(function (p) {
+        if (!p.shootDate) return;
+        var time = fmtTimeRange(p.shootTimeStart, p.shootTimeEnd);
+        plot(p.shootDate, {
+          kind: "shoot", sortKey: p.shootTimeStart || "99:99",
+          tone: PRODUCTION_STATUS_TONE[p.status] || "neutral",
+          label: p.client, timePrefix: p.shootTimeStart ? fmtTime(p.shootTimeStart) : "",
+          tooltip: p.client + ' — ' + p.shootName + (time ? ' (' + time + ')' : ''),
+          action: "open-production", id: p.id
+        });
+      });
+    }
+    if (show.postPro) {
+      STATE.postPro.forEach(function (item) {
+        if (!item.deadline) return;
+        plot(item.deadline, {
+          kind: "postpro", sortKey: "00:00",
+          tone: POST_PRO_STAGE_TONE[item.stage] || "neutral",
+          label: item.productionName || "Post Pro", timePrefix: "",
+          tooltip: (item.productionName || "Post Pro") + ' — ' + item.mediaType + ' deadline (' + item.stage + ')',
+          action: "goto-post-pro", id: item.id
+        });
+      });
+    }
+    if (show.tasks) {
+      STATE.tasks.forEach(function (t) {
+        if (!t.dueDate || t.status === "Done") return;
+        plot(t.dueDate, {
+          kind: "task", sortKey: "23:59",
+          tone: TASK_PRIORITY_TONE[t.priority] || "neutral",
+          label: t.title, timePrefix: "",
+          tooltip: t.title + (t.assignees.length ? ' — ' + fmtAssignees(t.assignees) : '') + ' (due)',
+          action: "goto-tasks", id: t.id
+        });
+      });
+    }
+    Object.keys(byDate).forEach(function (d) {
+      byDate[d].sort(function (a, b) { return a.sortKey < b.sortKey ? -1 : 1; });
+    });
+    var noDate = show.shoots ? STATE.productions.filter(function (p) { return !p.shootDate; }) : [];
+
+    var html = '<div class="section-head"><div><p>Shoots, Post Pro deadlines, and task due dates plotted by date.</p></div></div>';
+    html += '<div class="filter-row">' +
+      '<button class="chip-filter' + (show.shoots ? " active" : "") + '" data-action="cal-toggle" data-value="shoots">Shoots</button>' +
+      '<button class="chip-filter' + (show.postPro ? " active" : "") + '" data-action="cal-toggle" data-value="postPro">Post Pro</button>' +
+      '<button class="chip-filter' + (show.tasks ? " active" : "") + '" data-action="cal-toggle" data-value="tasks">Tasks</button>' +
+      '</div>';
     html += '<div class="cal-toolbar"><button class="btn btn-sm" data-action="cal-prev">' + ICONS.back + '</button>' +
       '<div class="cal-month-label">' + monthLabel(y, m) + '</div>' +
       '<button class="btn btn-sm" data-action="cal-next" style="transform:scaleX(-1);">' + ICONS.back + '</button>' +
@@ -772,12 +931,9 @@
       var items = byDate[iso] || [];
       var isToday = iso === todayIso;
       html += '<div class="cal-cell' + (isToday ? ' cal-today' : '') + '"><div class="cal-daynum">' + day + '</div>';
-      items.slice(0, 3).forEach(function (p) {
-        var tone = PRODUCTION_STATUS_TONE[p.status] || "neutral";
-        var time = fmtTimeRange(p.shootTimeStart, p.shootTimeEnd);
-        var tooltip = p.client + ' — ' + p.shootName + (time ? ' (' + time + ')' : '');
-        html += '<button class="cal-chip tone-' + tone + '" data-action="open-production" data-id="' + p.id + '" title="' + esc(tooltip) + '">' +
-          (p.shootTimeStart ? '<span class="cal-chip-time">' + esc(fmtTime(p.shootTimeStart)) + '</span> ' : '') + esc(p.client) + '</button>';
+      items.slice(0, 3).forEach(function (entry) {
+        html += '<button class="cal-chip cal-chip-' + entry.kind + ' tone-' + entry.tone + '" data-action="' + entry.action + '" data-id="' + entry.id + '" title="' + esc(entry.tooltip) + '">' +
+          (entry.timePrefix ? '<span class="cal-chip-time">' + esc(entry.timePrefix) + '</span> ' : '') + esc(entry.label) + '</button>';
       });
       if (items.length > 3) html += '<div class="cal-more">+' + (items.length - 3) + ' more</div>';
       html += '</div>';
@@ -926,6 +1082,7 @@
     if (modalState) { root.innerHTML = renderModal(); bindModalEvents(); }
     else if (confirmState) { root.innerHTML = renderConfirm(); bindConfirmEvents(); }
     else if (adminModal) { root.innerHTML = renderAdminModal(); bindAdminModalEvents(); }
+    else if (postProModal) { root.innerHTML = renderPostProModal(); bindPostProModalEvents(); }
     else root.innerHTML = "";
   }
 
@@ -1116,6 +1273,22 @@
       return mutate("/api/expenses/" + id + "/status", "PATCH", { status: nextStatus }, nextStatus === "Paid" ? "Expense marked paid." : "Expense marked unpaid.");
     }
 
+    if (action === "new-post-pro") {
+      postProModal = { id: null, values: { productionId: "", mediaType: "Photo", stage: (STATE.constants.postProStages.Photo || [])[0] || "", framesPerBatch: "", videosPerBatch: "", deadline: "", notes: "" } };
+      return renderOverlay();
+    }
+    if (action === "edit-post-pro") {
+      var ppItem = byId(STATE.postPro, id);
+      if (!ppItem) return;
+      postProModal = { id: ppItem.id, values: {
+        productionId: ppItem.productionId, mediaType: ppItem.mediaType, stage: ppItem.stage,
+        framesPerBatch: ppItem.framesPerBatch || "", videosPerBatch: ppItem.videosPerBatch || "",
+        deadline: ppItem.deadline || "", notes: ppItem.notes || ""
+      } };
+      return renderOverlay();
+    }
+    if (action === "delete-post-pro") { var ppd = byId(STATE.postPro, id); return askDelete("post-pro", id, ppd ? ppd.productionName : "Post Pro item"); }
+
     if (action === "toggle-subtask") {
       var checkbox = el;
       return mutate("/api/subtasks/" + id, "PUT", { done: checkbox.checked });
@@ -1160,6 +1333,12 @@
     if (action === "cal-prev") { UI.calendar.month--; if (UI.calendar.month < 0) { UI.calendar.month = 11; UI.calendar.year--; } return render(); }
     if (action === "cal-next") { UI.calendar.month++; if (UI.calendar.month > 11) { UI.calendar.month = 0; UI.calendar.year++; } return render(); }
     if (action === "cal-today") { var d = new Date(); UI.calendar.year = d.getFullYear(); UI.calendar.month = d.getMonth(); return render(); }
+    if (action === "cal-toggle") {
+      var key = el.getAttribute("data-value");
+      UI.calendar.show[key] = !UI.calendar.show[key];
+      return render();
+    }
+    if (action === "goto-post-pro") return goTab("post-pro", true);
   });
 
   document.addEventListener("submit", function (e) {
@@ -1196,6 +1375,7 @@
     if (e.key === "Escape") {
       if (modalState) { closeModal(); }
       else if (confirmState) { confirmState = null; renderOverlay(); }
+      else if (postProModal) { postProModal = null; renderOverlay(); }
     }
   });
 
@@ -1211,6 +1391,10 @@
     if (e.target.matches('[data-action="set-production-status"]')) {
       var pid = e.target.getAttribute("data-id");
       return mutate("/api/productions/" + pid + "/status", "PATCH", { status: e.target.value }, "Status updated.");
+    }
+    if (e.target.matches('[data-action="set-post-pro-stage"]')) {
+      var ppsid = e.target.getAttribute("data-id");
+      return mutate("/api/post-pro/" + ppsid + "/stage", "PATCH", { stage: e.target.value }, "Stage updated.");
     }
     if (e.target.matches('[data-action="productions-date-month"]')) { UI.dateFilter.productions.month = e.target.value; return render(); }
     if (e.target.matches('[data-action="productions-date-from"]')) { UI.dateFilter.productions.dateFrom = e.target.value; return render(); }

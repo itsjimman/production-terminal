@@ -202,6 +202,36 @@ class Expense(db.Model):
         }
 
 
+class PostProItem(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    production_id = db.Column(db.Integer, db.ForeignKey("production.id", ondelete="CASCADE"), nullable=False)
+    media_type = db.Column(db.String(10), nullable=False, default="Photo")  # "Photo" | "Video"
+    stage = db.Column(db.String(30), nullable=False, default="Selections")
+    frames_per_batch = db.Column(db.Integer, nullable=True)  # Photo pipeline
+    videos_per_batch = db.Column(db.Integer, nullable=True)  # Video pipeline
+    deadline = db.Column(db.Date, nullable=True)
+    notes = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    production = db.relationship("Production", lazy="joined")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "productionId": self.production_id,
+            "productionName": f"{self.production.client} — {self.production.shoot_name}" if self.production else None,
+            "mediaType": self.media_type,
+            "stage": self.stage,
+            "framesPerBatch": self.frames_per_batch,
+            "videosPerBatch": self.videos_per_batch,
+            "deadline": self.deadline.isoformat() if self.deadline else None,
+            "notes": self.notes,
+            "createdAt": self.created_at.isoformat(),
+            "updatedAt": self.updated_at.isoformat(),
+        }
+
+
 class AuditLog(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     actor_id = db.Column(db.Integer, db.ForeignKey("team_member.id", ondelete="SET NULL"), nullable=True)

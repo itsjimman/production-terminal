@@ -3,7 +3,7 @@ import io
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
 
-from .models import Production, Task, Subtask, Expense, TeamMember, AuditLog
+from .models import Production, Task, Subtask, Expense, TeamMember, AuditLog, PostProItem
 
 HEADER_FONT = Font(bold=True, color="FFFFFF")
 HEADER_FILL = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
@@ -71,6 +71,16 @@ def build_export_workbook():
           e.description, e.category, e.brand or "", e.amount, e.date.isoformat() if e.date else "",
           e.paid_by.name if e.paid_by else "", e.status, e.notes, e.created_at.isoformat()]
          for e in Expense.query.order_by(Expense.id).all()],
+    )
+
+    _add_sheet(
+        wb, "Post Pro",
+        ["ID", "Production", "Media Type", "Stage", "Frames/Batch", "Videos/Batch", "Deadline", "Notes", "Created At", "Updated At"],
+        [[i.id, f"{i.production.client} — {i.production.shoot_name}" if i.production else "",
+          i.media_type, i.stage, i.frames_per_batch, i.videos_per_batch,
+          i.deadline.isoformat() if i.deadline else "", i.notes,
+          i.created_at.isoformat(), i.updated_at.isoformat()]
+         for i in PostProItem.query.order_by(PostProItem.id).all()],
     )
 
     _add_sheet(

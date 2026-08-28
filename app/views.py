@@ -41,6 +41,12 @@ def calendar():
     return _shell("calendar")
 
 
+@bp.route("/post-pro")
+@login_required
+def post_pro():
+    return _shell("post-pro")
+
+
 @bp.route("/admin")
 @login_required
 @admin_required
