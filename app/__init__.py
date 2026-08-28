@@ -17,6 +17,8 @@ NEW_COLUMNS = {
         ("frame_count", "INTEGER"),
         ("videos", "VARCHAR(200)"),
         ("location", "VARCHAR(200)"),
+        ("shoot_time_start", "VARCHAR(5)"),
+        ("shoot_time_end", "VARCHAR(5)"),
     ],
     "task": [
         ("created_by_id", "INTEGER"),

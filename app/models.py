@@ -62,6 +62,8 @@ class Production(db.Model):
     type = db.Column(db.String(60), nullable=False, default="Campaign - Photography")
     status = db.Column(db.String(30), nullable=False, default="Inquiry")
     shoot_date = db.Column(db.Date, nullable=True)
+    shoot_time_start = db.Column(db.String(5), nullable=True)  # "HH:MM", 24h
+    shoot_time_end = db.Column(db.String(5), nullable=True)  # "HH:MM", 24h
     budget = db.Column(db.Integer, nullable=True)
     production_hours = db.Column(db.Integer, nullable=True)
     looks_skus = db.Column(db.String(200), nullable=True)
@@ -87,6 +89,8 @@ class Production(db.Model):
             "type": self.type,
             "status": self.status,
             "shootDate": self.shoot_date.isoformat() if self.shoot_date else None,
+            "shootTimeStart": self.shoot_time_start,
+            "shootTimeEnd": self.shoot_time_end,
             "budget": self.budget,
             "productionHours": self.production_hours,
             "looksSkus": self.looks_skus,

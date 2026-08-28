@@ -13,7 +13,8 @@
     back: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10 3L5 8L10 13" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     check: '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2.8 7.2L5.6 10L11.2 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     moon: '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M12 8.7A5.3 5.3 0 1 1 5.3 2a4.3 4.3 0 0 0 6.7 6.7Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>',
-    sun: '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="3" stroke="currentColor" stroke-width="1.3"/><path d="M7 0.8V2.2M7 11.8V13.2M0.8 7H2.2M11.8 7H13.2M2.5 2.5L3.5 3.5M10.5 10.5L11.5 11.5M2.5 11.5L3.5 10.5M10.5 3.5L11.5 2.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>'
+    sun: '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="3" stroke="currentColor" stroke-width="1.3"/><path d="M7 0.8V2.2M7 11.8V13.2M0.8 7H2.2M11.8 7H13.2M2.5 2.5L3.5 3.5M10.5 10.5L11.5 11.5M2.5 11.5L3.5 10.5M10.5 3.5L11.5 2.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>',
+    download: '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1.5V9.5M7 9.5L4 6.5M7 9.5L10 6.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 10.5V11.5C2 12.05 2.45 12.5 3 12.5H11C11.55 12.5 12 12.05 12 11.5V10.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>'
   };
 
   var TASK_STATUS_TONE = { "To Do": "neutral", "In Progress": "info", "Done": "good" };
@@ -44,6 +45,20 @@
     var d = new Date(iso + "T00:00:00");
     if (isNaN(d.getTime())) return iso;
     return d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+  }
+  function fmtTime(hhmm) {
+    if (!hhmm) return "";
+    var parts = hhmm.split(":");
+    var h = parseInt(parts[0], 10), min = parts[1];
+    if (isNaN(h)) return hhmm;
+    var ampm = h >= 12 ? "PM" : "AM";
+    var h12 = h % 12; if (h12 === 0) h12 = 12;
+    return h12 + ":" + min + " " + ampm;
+  }
+  function fmtTimeRange(start, end) {
+    if (!start && !end) return "";
+    if (start && end) return fmtTime(start) + "–" + fmtTime(end);
+    return fmtTime(start || end);
   }
   function daysUntil(iso) {
     if (!iso) return null;
@@ -216,6 +231,8 @@
           { key: "type", label: "Type", type: "select", options: C.productionTypes },
           { key: "status", label: "Status", type: "select", options: C.productionStatuses },
           { key: "shootDate", label: "Shoot date", type: "date" },
+          { key: "shootTimeStart", label: "Shoot start time", type: "time" },
+          { key: "shootTimeEnd", label: "Shoot end time", type: "time" },
           { key: "budget", label: "Budget (optional, IDR)", type: "number", placeholder: "e.g. 6000000" },
           { key: "productionHours", label: "Production hours", type: "number", placeholder: "e.g. 8" },
           { key: "looksSkus", label: "Number of looks / SKU", type: "text", placeholder: "e.g. 12 looks" },
@@ -346,7 +363,12 @@
     else if (UI.tab === "productions") { content.innerHTML = renderProductions(); actions.innerHTML = '<button class="btn btn-accent" data-action="new-production">' + ICONS.plus + ' New production</button>'; }
     else if (UI.tab === "tasks") { content.innerHTML = renderTasksTab(); actions.innerHTML = '<button class="btn btn-accent" data-action="new-task">' + ICONS.plus + ' New task</button>'; }
     else if (UI.tab === "calendar") content.innerHTML = renderCalendarTab();
-    else if (UI.tab === "admin") { content.innerHTML = renderAdminTab(); actions.innerHTML = '<button class="btn btn-accent" data-action="new-user">' + ICONS.plus + ' Add user</button>'; }
+    else if (UI.tab === "admin") {
+      content.innerHTML = renderAdminTab();
+      actions.innerHTML =
+        '<a class="btn btn-ghost" href="/api/admin/export">' + ICONS.download + ' Export to Excel</a>' +
+        '<button class="btn btn-accent" data-action="new-user">' + ICONS.plus + ' Add user</button>';
+    }
     else if (UI.tab === "profile") content.innerHTML = renderProfileTab();
     renderOverlay();
   }
@@ -391,7 +413,8 @@
     html += '<div class="two-col">';
     html += '<div class="panel"><div class="panel-head">Upcoming shoots</div>';
     html += renderMiniList(upcoming.slice(0, 8).sort(function (a, b) { return (a.shootDate || "") < (b.shootDate || "") ? -1 : 1; }), function (p) {
-      return { name: p.client + " — " + p.shootName, meta: fmtDate(p.shootDate) + " · " + p.status, onClick: "open-production", id: p.id };
+      var time = fmtTimeRange(p.shootTimeStart, p.shootTimeEnd);
+      return { name: p.client + " — " + p.shootName, meta: fmtDate(p.shootDate) + (time ? " · " + time : "") + " · " + p.status, onClick: "open-production", id: p.id };
     }, "No shoots scheduled in the next 14 days.");
     html += '</div>';
 
@@ -433,7 +456,8 @@
     } else {
       var list = sets[key];
       html += renderMiniList(list.sort(function (a, b) { return (a.shootDate || "9999") < (b.shootDate || "9999") ? -1 : 1; }), function (p) {
-        return { name: p.client + " — " + p.shootName, meta: fmtDate(p.shootDate) + " · " + p.status, onClick: "open-production", id: p.id };
+        var time = fmtTimeRange(p.shootTimeStart, p.shootTimeEnd);
+        return { name: p.client + " — " + p.shootName, meta: fmtDate(p.shootDate) + (time ? " · " + time : "") + " · " + p.status, onClick: "open-production", id: p.id };
       }, "Nothing here right now.");
     }
     html += '</div>';
@@ -506,7 +530,7 @@
       '<button class="link-title" data-action="toggle-production" data-id="' + p.id + '">' + esc(p.client) + ' — ' + esc(p.shootName) + '</button>' +
       '<div class="cell-sub">' + esc(p.type) + (p.budget ? " · Budget " + fmtMoney(p.budget) : "") + '</div></td>';
     row += '<td>' + statusSelect("set-production-status", p.id, p.status, STATE.constants.productionStatuses, PRODUCTION_STATUS_TONE) + '</td>';
-    row += '<td>' + fmtDate(p.shootDate) + '</td>';
+    row += '<td>' + fmtDate(p.shootDate) + (fmtTimeRange(p.shootTimeStart, p.shootTimeEnd) ? '<div class="cell-sub">' + fmtTimeRange(p.shootTimeStart, p.shootTimeEnd) + '</div>' : '') + '</td>';
     row += '<td>' + (p.crew.length ? p.crew.map(esc).join(", ") : '<span class="cell-sub">—</span>') + '</td>';
     row += '<td><div class="link-row">' +
       (p.driveLink ? '<a class="link-chip" href="' + esc(p.driveLink) + '" target="_blank" rel="noopener">' + ICONS.link + ' Drive</a>' : '') +
@@ -521,6 +545,7 @@
       row += '<tr class="expand-row"><td colspan="6"><div class="expand-body">';
       if (!p.shootDate) row += '<div class="banner warn">No shoot date set yet — this production won’t show on the calendar.</div>';
       var facts = [];
+      if (fmtTimeRange(p.shootTimeStart, p.shootTimeEnd)) facts.push(["Shoot time", fmtTimeRange(p.shootTimeStart, p.shootTimeEnd)]);
       if (p.productionHours) facts.push(["Production hours", p.productionHours]);
       if (p.looksSkus) facts.push(["Looks / SKU", p.looksSkus]);
       if (p.frameCount) facts.push(["Frames", p.frameCount]);
@@ -673,6 +698,9 @@
       if (!p.shootDate) return;
       (byDate[p.shootDate] = byDate[p.shootDate] || []).push(p);
     });
+    Object.keys(byDate).forEach(function (d) {
+      byDate[d].sort(function (a, b) { return (a.shootTimeStart || "99:99") < (b.shootTimeStart || "99:99") ? -1 : 1; });
+    });
     var noDate = STATE.productions.filter(function (p) { return !p.shootDate; });
 
     var html = '<div class="section-head"><div><p>Shoots plotted by date.</p></div></div>';
@@ -693,7 +721,10 @@
       html += '<div class="cal-cell' + (isToday ? ' cal-today' : '') + '"><div class="cal-daynum">' + day + '</div>';
       items.slice(0, 3).forEach(function (p) {
         var tone = PRODUCTION_STATUS_TONE[p.status] || "neutral";
-        html += '<button class="cal-chip tone-' + tone + '" data-action="open-production" data-id="' + p.id + '" title="' + esc(p.client + ' — ' + p.shootName) + '">' + esc(p.client) + '</button>';
+        var time = fmtTimeRange(p.shootTimeStart, p.shootTimeEnd);
+        var tooltip = p.client + ' — ' + p.shootName + (time ? ' (' + time + ')' : '');
+        html += '<button class="cal-chip tone-' + tone + '" data-action="open-production" data-id="' + p.id + '" title="' + esc(tooltip) + '">' +
+          (p.shootTimeStart ? '<span class="cal-chip-time">' + esc(fmtTime(p.shootTimeStart)) + '</span> ' : '') + esc(p.client) + '</button>';
       });
       if (items.length > 3) html += '<div class="cal-more">+' + (items.length - 3) + ' more</div>';
       html += '</div>';

@@ -3,7 +3,7 @@ import binascii
 import io
 from datetime import datetime, date
 
-from flask import Blueprint, current_app, jsonify, request, session
+from flask import Blueprint, current_app, jsonify, request, send_file, session
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 from .auth import admin_required, login_required
@@ -11,6 +11,7 @@ from .constants import (
     PRODUCTION_STATUSES, PRODUCTION_TYPES, TASK_STATUSES, TASK_PRIORITIES,
     EXPENSE_CATEGORIES, EXPENSE_STATUSES,
 )
+from .export import build_export_workbook
 from .models import db, TeamMember, Production, Task, Subtask, Expense
 
 bp = Blueprint("api", __name__)
@@ -27,6 +28,24 @@ def parse_date(s):
         return date.fromisoformat(s)
     except ValueError:
         return None
+
+
+def parse_time(s):
+    """Accepts an <input type=time> value ("HH:MM" or "HH:MM:SS") and
+    normalizes it to "HH:MM". Anything else is dropped rather than stored."""
+    s = (s or "").strip()
+    if not s:
+        return None
+    parts = s.split(":")
+    if len(parts) < 2:
+        return None
+    try:
+        h, m = int(parts[0]), int(parts[1])
+    except ValueError:
+        return None
+    if not (0 <= h <= 23 and 0 <= m <= 59):
+        return None
+    return f"{h:02d}:{m:02d}"
 
 
 def parse_int(v):
@@ -132,6 +151,8 @@ def create_production():
         type=body.get("type") or PRODUCTION_TYPES[0],
         status=body.get("status") or PRODUCTION_STATUSES[0],
         shoot_date=parse_date(body.get("shootDate")),
+        shoot_time_start=parse_time(body.get("shootTimeStart")),
+        shoot_time_end=parse_time(body.get("shootTimeEnd")),
         budget=parse_int(body.get("budget")),
         production_hours=parse_int(body.get("productionHours")),
         looks_skus=body.get("looksSkus") or None,
@@ -164,6 +185,8 @@ def update_production(pid):
     p.type = body.get("type") or p.type
     p.status = body.get("status") or p.status
     p.shoot_date = parse_date(body.get("shootDate"))
+    p.shoot_time_start = parse_time(body.get("shootTimeStart"))
+    p.shoot_time_end = parse_time(body.get("shootTimeEnd"))
     p.budget = parse_int(body.get("budget"))
     p.production_hours = parse_int(body.get("productionHours"))
     p.looks_skus = body.get("looksSkus") or None
@@ -390,6 +413,20 @@ def add_team_member():
 def users_ok(status=200):
     members = TeamMember.query.order_by(TeamMember.name.asc()).all()
     return jsonify({"ok": True, "users": [m.to_admin_dict() for m in members]}), status
+
+
+@bp.route("/admin/export", methods=["GET"])
+@login_required
+@admin_required
+def export_data():
+    buf = build_export_workbook()
+    filename = "itsjimman-export-" + datetime.utcnow().strftime("%Y-%m-%d") + ".xlsx"
+    return send_file(
+        buf,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        as_attachment=True,
+        download_name=filename,
+    )
 
 
 @bp.route("/admin/users", methods=["GET"])
