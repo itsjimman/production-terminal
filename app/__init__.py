@@ -30,6 +30,9 @@ NEW_COLUMNS = {
         ("avatar_data", "TEXT"),
         ("last_login_at", "DATETIME"),
     ],
+    "expense": [
+        ("brand", "VARCHAR(120)"),
+    ],
 }
 
 
@@ -45,6 +48,30 @@ def _migrate_add_columns(app):
     db.session.execute(text(
         "CREATE UNIQUE INDEX IF NOT EXISTS ix_team_member_username ON team_member(username)"
     ))
+    db.session.commit()
+
+
+def _migrate_data(app):
+    """One-time data fixes, each guarded so it only ever runs once (safe to
+    leave in permanently — becomes a no-op after the first successful run)."""
+    inspector = inspect(db.engine)
+    if "production" in inspector.get_table_names():
+        db.session.execute(text(
+            "UPDATE production SET status='Pre-Production' WHERE status='Scheduled'"
+        ))
+    # Task assignment used to be a single assignee_id column; now it's the
+    # task_assignee many-to-many table. Copy old single assignments across
+    # exactly once — guarded on the junction table being empty, so removing
+    # someone's only assignment later never gets "revived" by a later deploy.
+    if "task_assignee" in inspector.get_table_names() and "task" in inspector.get_table_names():
+        task_cols = {c["name"] for c in inspector.get_columns("task")}
+        if "assignee_id" in task_cols:
+            count = db.session.execute(text("SELECT COUNT(*) FROM task_assignee")).scalar()
+            if count == 0:
+                db.session.execute(text(
+                    "INSERT INTO task_assignee (task_id, team_member_id) "
+                    "SELECT id, assignee_id FROM task WHERE assignee_id IS NOT NULL"
+                ))
     db.session.commit()
 
 
@@ -89,6 +116,7 @@ def create_app(config_class=Config):
     with app.app_context():
         db.create_all()
         _migrate_add_columns(app)
+        _migrate_data(app)
         if TeamMember.query.count() == 0:
             for name in TEAM_DEFAULT:
                 db.session.add(TeamMember(name=name))

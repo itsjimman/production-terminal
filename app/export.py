@@ -46,11 +46,11 @@ def build_export_workbook():
 
     _add_sheet(
         wb, "Tasks",
-        ["ID", "Title", "Production", "Assignee", "Created By", "Due Date",
+        ["ID", "Title", "Production", "Assignees", "Created By", "Due Date",
          "Status", "Priority", "Notes", "Created At", "Updated At"],
         [[t.id, t.title,
           f"{t.production.client} — {t.production.shoot_name}" if t.production else "",
-          t.assignee.name if t.assignee else "", t.created_by.name if t.created_by else "",
+          ", ".join(m.name for m in t.assignees), t.created_by.name if t.created_by else "",
           t.due_date.isoformat() if t.due_date else "", t.status, t.priority, t.notes,
           t.created_at.isoformat(), t.updated_at.isoformat()]
          for t in Task.query.order_by(Task.id).all()],
@@ -65,10 +65,10 @@ def build_export_workbook():
 
     _add_sheet(
         wb, "Expenses",
-        ["ID", "Production", "Description", "Category", "Amount", "Date",
+        ["ID", "Production", "Description", "Category", "Brand", "Amount", "Date",
          "Paid By", "Status", "Notes", "Created At"],
         [[e.id, f"{e.production.client} — {e.production.shoot_name}" if e.production else "",
-          e.description, e.category, e.amount, e.date.isoformat() if e.date else "",
+          e.description, e.category, e.brand or "", e.amount, e.date.isoformat() if e.date else "",
           e.paid_by.name if e.paid_by else "", e.status, e.notes, e.created_at.isoformat()]
          for e in Expense.query.order_by(Expense.id).all()],
     )

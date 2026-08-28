@@ -114,11 +114,17 @@ class Production(db.Model):
         return out
 
 
+task_assignee = db.Table(
+    "task_assignee",
+    db.Column("task_id", db.Integer, db.ForeignKey("task.id", ondelete="CASCADE"), primary_key=True),
+    db.Column("team_member_id", db.Integer, db.ForeignKey("team_member.id", ondelete="CASCADE"), primary_key=True),
+)
+
+
 class Task(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(240), nullable=False)
     production_id = db.Column(db.Integer, db.ForeignKey("production.id", ondelete="SET NULL"), nullable=True)
-    assignee_id = db.Column(db.Integer, db.ForeignKey("team_member.id", ondelete="SET NULL"), nullable=True)
     created_by_id = db.Column(db.Integer, db.ForeignKey("team_member.id", ondelete="SET NULL"), nullable=True)
     due_date = db.Column(db.Date, nullable=True)
     status = db.Column(db.String(20), nullable=False, default="To Do")
@@ -127,7 +133,7 @@ class Task(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
-    assignee = db.relationship("TeamMember", lazy="joined", foreign_keys=[assignee_id])
+    assignees = db.relationship("TeamMember", secondary=task_assignee, lazy="joined")
     created_by = db.relationship("TeamMember", lazy="joined", foreign_keys=[created_by_id])
     subtasks = db.relationship(
         "Subtask", backref="task", cascade="all, delete-orphan",
@@ -141,7 +147,7 @@ class Task(db.Model):
             "productionId": self.production_id,
             "productionName": (f"{self.production.client} — {self.production.shoot_name}"
                                 if self.production_id and self.production else None),
-            "assignee": self.assignee.name if self.assignee else "",
+            "assignees": [m.name for m in self.assignees],
             "createdBy": self.created_by.name if self.created_by else "",
             "dueDate": self.due_date.isoformat() if self.due_date else None,
             "status": self.status,
@@ -169,6 +175,7 @@ class Expense(db.Model):
     production_id = db.Column(db.Integer, db.ForeignKey("production.id", ondelete="CASCADE"), nullable=False)
     description = db.Column(db.String(300), nullable=False)
     category = db.Column(db.String(60), nullable=False, default="Other")
+    brand = db.Column(db.String(120), nullable=True)
     amount = db.Column(db.Integer, nullable=False, default=0)
     date = db.Column(db.Date, nullable=True)
     paid_by_id = db.Column(db.Integer, db.ForeignKey("team_member.id", ondelete="SET NULL"), nullable=True)
@@ -184,6 +191,7 @@ class Expense(db.Model):
             "productionId": self.production_id,
             "description": self.description,
             "category": self.category,
+            "brand": self.brand,
             "amount": self.amount,
             "date": self.date.isoformat() if self.date else None,
             "paidBy": self.paid_by.name if self.paid_by else "",

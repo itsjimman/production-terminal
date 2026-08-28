@@ -5,11 +5,11 @@ and the frontend never drift apart."""
 TEAM_DEFAULT = ["Jimman", "Evelyn", "Bayu"]
 
 PRODUCTION_STATUSES = [
-    "Inquiry", "Pre-Production", "Scheduled", "Shooting",
+    "Inquiry", "Pre-Production", "Shooting",
     "Editing", "Review", "Delivered", "Cancelled",
 ]
 PRODUCTION_STATUS_TONE = {
-    "Inquiry": "neutral", "Pre-Production": "info", "Scheduled": "info",
+    "Inquiry": "neutral", "Pre-Production": "info",
     "Shooting": "accent", "Editing": "accent", "Review": "accent",
     "Delivered": "good", "Cancelled": "danger",
 }

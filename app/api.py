@@ -259,13 +259,16 @@ def create_task():
     t = Task(
         title=body["title"].strip(),
         production_id=int(body["productionId"]) if str(body.get("productionId") or "").strip() else None,
-        assignee=get_or_create_member(body.get("assignee")),
         created_by=get_or_create_member(session.get("viewer_name")),
         due_date=parse_date(body.get("dueDate")),
         status=body.get("status") or TASK_STATUSES[0],
         priority=body.get("priority") or "Normal",
         notes=body.get("notes") or None,
     )
+    for name in body.get("assignees") or []:
+        member = get_or_create_member(name)
+        if member:
+            t.assignees.append(member)
     db.session.add(t)
     log_change("created", "Task", t.title)
     db.session.commit()
@@ -281,11 +284,16 @@ def update_task(tid):
         return bad("Task title is required.")
     t.title = body["title"].strip()
     t.production_id = int(body["productionId"]) if str(body.get("productionId") or "").strip() else None
-    t.assignee = get_or_create_member(body.get("assignee"))
     t.due_date = parse_date(body.get("dueDate"))
     t.status = body.get("status") or t.status
     t.priority = body.get("priority") or t.priority
     t.notes = body.get("notes") or None
+    if "assignees" in body:
+        t.assignees = []
+        for name in body.get("assignees") or []:
+            member = get_or_create_member(name)
+            if member:
+                t.assignees.append(member)
     log_change("updated", "Task", t.title)
     db.session.commit()
     return ok()
@@ -367,6 +375,7 @@ def create_expense():
         production_id=int(body["productionId"]),
         description=body["description"].strip(),
         category=body.get("category") or EXPENSE_CATEGORIES[0],
+        brand=body.get("brand") or None,
         amount=amount,
         date=parse_date(body.get("date")),
         paid_by=get_or_create_member(body.get("paidBy")),
@@ -392,6 +401,7 @@ def update_expense(eid):
         return bad("Amount must be a number.")
     e.description = body["description"].strip()
     e.category = body.get("category") or e.category
+    e.brand = body.get("brand") or None
     e.amount = amount
     e.date = parse_date(body.get("date"))
     e.paid_by = get_or_create_member(body.get("paidBy"))

@@ -21,7 +21,7 @@
   var TASK_PRIORITY_TONE = { "Low": "neutral", "Normal": "info", "High": "danger" };
   var EXPENSE_STATUS_TONE = { "Unpaid": "danger", "Paid": "good" };
   var PRODUCTION_STATUS_TONE = {
-    "Inquiry": "neutral", "Pre-Production": "info", "Scheduled": "info",
+    "Inquiry": "neutral", "Pre-Production": "info",
     "Shooting": "accent", "Editing": "accent", "Review": "accent",
     "Delivered": "good", "Cancelled": "danger"
   };
@@ -54,6 +54,9 @@
     if (isNaN(d.getTime())) return iso;
     return d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) +
       ", " + d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  }
+  function fmtAssignees(list) {
+    return (list && list.length) ? list.join(", ") : "";
   }
   function fmtTime(hhmm) {
     if (!hhmm) return "";
@@ -116,6 +119,7 @@
     statusFilter: { productions: "All", tasks: "All" },
     assigneeFilter: { tasks: "All" },
     productionFilter: { tasks: "All" },
+    priorityFilter: { tasks: "All" },
     dateFilter: { productions: { mode: "all", month: "", dateFrom: "", dateTo: "" } }
   };
   var modalState = null;
@@ -265,7 +269,7 @@
         fields: [
           { key: "title", label: "Task", type: "text", required: true, placeholder: "e.g. Send selects to client" },
           { key: "productionId", label: "Linked production", type: "select-production" },
-          { key: "assignee", label: "Assignee", type: "select-user" },
+          { key: "assignees", label: "Assignees", type: "multiselect-user" },
           { key: "dueDate", label: "Due date", type: "date" },
           { key: "status", label: "Status", type: "select", options: C.taskStatuses },
           { key: "priority", label: "Priority", type: "select", options: C.taskPriorities },
@@ -279,7 +283,8 @@
         fields: [
           { key: "description", label: "Description", type: "text", required: true, placeholder: "e.g. Grab to location" },
           { key: "category", label: "Category", type: "select", options: C.expenseCategories },
-          { key: "amount", label: "Amount (IDR)", type: "number", required: true, placeholder: "0" },
+          { key: "brand", label: "Brand (optional)", type: "brand-select", placeholder: "e.g. Sunset Eyewear" },
+          { key: "amount", label: "Amount (IDR, optional)", type: "number", placeholder: "0" },
           { key: "date", label: "Date", type: "date" },
           { key: "paidBy", label: "Paid by", type: "select-team" },
           { key: "status", label: "Status", type: "select", options: C.expenseStatuses },
@@ -299,7 +304,7 @@
     var isNew = !id;
     cfg.fields.forEach(function (f) {
       if (values[f.key] !== undefined) return;
-      if (f.type === "multiselect") values[f.key] = [];
+      if (f.type === "multiselect" || f.type === "multiselect-user") values[f.key] = [];
       else if (f.type === "select") values[f.key] = f.options[0];
       else values[f.key] = "";
     });
@@ -312,7 +317,7 @@
   function collectFormValues(cfg, base) {
     var values = Object.assign({}, base);
     cfg.fields.forEach(function (f) {
-      if (f.type === "multiselect") {
+      if (f.type === "multiselect" || f.type === "multiselect-user") {
         var checks = document.querySelectorAll('[data-field="' + f.key + '"] input[type=checkbox]');
         var arr = [];
         checks.forEach(function (c) { if (c.checked) arr.push(c.value); });
@@ -435,7 +440,7 @@
       var d = daysUntil(t.dueDate);
       var overdue = d !== null && d < 0;
       return {
-        name: t.title, meta: (t.productionName || "No production") + " · " + (t.assignee || "Unassigned") + (t.dueDate ? " · due " + fmtDate(t.dueDate) : "") + (overdue ? " · overdue" : ""),
+        name: t.title, meta: (t.productionName || "No production") + " · " + (fmtAssignees(t.assignees) || "Unassigned") + (t.dueDate ? " · due " + fmtDate(t.dueDate) : "") + (overdue ? " · overdue" : ""),
         onClick: "goto-tasks", id: t.id, danger: overdue
       };
     }, "Nothing open — nice work.");
@@ -458,7 +463,7 @@
       html += renderMiniList(sets.openTasks.sort(function (a, b) { return (a.dueDate || "9999") < (b.dueDate || "9999") ? -1 : 1; }), function (t) {
         var d = daysUntil(t.dueDate);
         var overdue = d !== null && d < 0;
-        return { name: t.title, meta: (t.productionName || "No production") + " · " + (t.assignee || "Unassigned") + (t.dueDate ? " · due " + fmtDate(t.dueDate) : ""), onClick: "goto-tasks", id: t.id, danger: overdue };
+        return { name: t.title, meta: (t.productionName || "No production") + " · " + (fmtAssignees(t.assignees) || "Unassigned") + (t.dueDate ? " · due " + fmtDate(t.dueDate) : ""), onClick: "goto-tasks", id: t.id, danger: overdue };
       }, "Nothing open — nice work.");
     } else if (key === "unpaid") {
       html += renderMiniList(sets.unpaid.sort(function (a, b) { return b.amount - a.amount; }), function (e) {
@@ -593,7 +598,7 @@
       var done = t.subtasks.filter(function (s) { return s.done; }).length;
       html += '<li style="align-items:flex-start;flex-direction:column;gap:6px;">';
       html += '<div style="display:flex;width:100%;align-items:center;gap:8px;">';
-      html += '<div class="t"><div class="name">' + esc(t.title) + '</div><div class="meta">' + esc(t.assignee || "Unassigned") + (t.dueDate ? " · due " + fmtDate(t.dueDate) : "") + (t.subtasks.length ? " · " + done + "/" + t.subtasks.length + " subtasks" : "") + (t.createdBy ? " · added by " + esc(t.createdBy) : "") + '</div></div>';
+      html += '<div class="t"><div class="name">' + esc(t.title) + '</div><div class="meta">' + esc(fmtAssignees(t.assignees) || "Unassigned") + (t.dueDate ? " · due " + fmtDate(t.dueDate) : "") + (t.subtasks.length ? " · " + done + "/" + t.subtasks.length + " subtasks" : "") + (t.createdBy ? " · added by " + esc(t.createdBy) : "") + '</div></div>';
       html += statusPill(t.status, TASK_STATUS_TONE);
       html += '<div class="row-actions">' + completeBtn("toggle-task-done", t.id, t.status === "Done") + '<button class="icon-btn" title="Edit" data-action="edit-task" data-id="' + t.id + '">' + ICONS.edit + '</button><button class="icon-btn" title="Delete" data-action="delete-task" data-id="' + t.id + '">' + ICONS.trash + '</button></div>';
       html += '</div>';
@@ -634,11 +639,12 @@
     if (!list.length) { html += '<div class="empty-row">No expenses logged yet.</div></div>'; return html; }
     html += '<ul class="mini-list">' + list.map(function (e) {
       return '<li style="flex-wrap:wrap;">' +
-        '<div class="t"><div class="name">' + esc(e.description) + '</div><div class="meta">' + esc(e.category) + ' · ' + fmtMoney(e.amount) + ' · ' + fmtDate(e.date) + (e.paidBy ? ' · paid by ' + esc(e.paidBy) : '') + '</div>' +
+        '<div class="t"><div class="name">' + esc(e.description) + '</div><div class="meta">' + esc(e.category) + (e.brand ? ' · ' + esc(e.brand) : '') + ' · ' + fmtMoney(e.amount) + ' · ' + fmtDate(e.date) + (e.paidBy ? ' · paid by ' + esc(e.paidBy) : '') + '</div>' +
         (e.notes ? '<div class="meta" style="white-space:pre-wrap;">' + esc(e.notes) + '</div>' : '') + '</div>' +
         statusPill(e.status, EXPENSE_STATUS_TONE) +
         '<div class="row-actions">' + completeBtn("toggle-expense-paid", e.id, e.status === "Paid", "Mark paid", "Mark unpaid") + '<button class="icon-btn" title="Edit" data-action="edit-expense" data-id="' + e.id + '">' + ICONS.edit + '</button><button class="icon-btn" title="Delete" data-action="delete-expense" data-id="' + e.id + '">' + ICONS.trash + '</button></div></li>';
-    }).join("") + '</ul></div>';
+    }).join("") + '</ul>' +
+      '<div style="padding:10px 16px;text-align:right;border-top:1px solid var(--border);font-weight:700;">Total: ' + fmtMoney(total) + '</div></div>';
     return html;
   }
 
@@ -648,14 +654,16 @@
     var statusF = UI.statusFilter.tasks;
     var assigneeF = UI.assigneeFilter.tasks;
     var productionF = UI.productionFilter.tasks;
+    var priorityF = UI.priorityFilter.tasks;
     var list = STATE.tasks.filter(function (t) {
       if (statusF !== "All" && t.status !== statusF) return false;
+      if (priorityF !== "All" && (t.priority || "Normal") !== priorityF) return false;
       if (assigneeF !== "All") {
-        if (assigneeF === "Unassigned" ? !!t.assignee : t.assignee !== assigneeF) return false;
+        if (assigneeF === "Unassigned" ? t.assignees.length > 0 : t.assignees.indexOf(assigneeF) === -1) return false;
       }
       if (productionF !== "All" && String(t.productionId) !== productionF) return false;
       if (!q) return true;
-      return (t.title + " " + (t.productionName || "") + " " + t.assignee).toLowerCase().indexOf(q) > -1;
+      return (t.title + " " + (t.productionName || "") + " " + t.assignees.join(" ")).toLowerCase().indexOf(q) > -1;
     });
 
     var html = '<div class="section-head"><div><p>Every task across every production.</p></div>' +
@@ -663,6 +671,9 @@
 
     html += '<div class="filter-row">' + ["All"].concat(STATE.constants.taskStatuses).map(function (s) {
       return '<button class="chip-filter' + (s === statusF ? " active" : "") + '" data-action="filter-tasks-status" data-value="' + esc(s) + '">' + esc(s) + '</button>';
+    }).join("") + '</div>';
+    html += '<div class="filter-row">' + ["All"].concat(STATE.constants.taskPriorities).map(function (pr) {
+      return '<button class="chip-filter' + (pr === priorityF ? " active" : "") + '" data-action="filter-tasks-priority" data-value="' + esc(pr) + '">' + esc(pr) + '</button>';
     }).join("") + '</div>';
     var assigneeOptions = ["All"].concat(STATE.team.map(function (m) { return m.name; })).concat(["Unassigned"]);
     html += '<div class="filter-row">' + assigneeOptions.map(function (a) {
@@ -677,7 +688,7 @@
 
     if (!list.length) { html += '<div class="table-wrap" style="margin-top:14px;"><div class="empty-row">No tasks match.</div></div>'; return html; }
 
-    html += '<div class="table-wrap" style="margin-top:14px;"><table class="tbl-tasks"><thead><tr><th>Task</th><th class="col-tasks-production">Production</th><th>Assignee</th><th class="col-tasks-createdby">Created by</th><th>Due</th><th>Status</th><th class="col-tasks-priority">Priority</th><th></th></tr></thead><tbody>';
+    html += '<div class="table-wrap" style="margin-top:14px;"><table class="tbl-tasks"><thead><tr><th>Task</th><th class="col-tasks-production">Production</th><th>Assignees</th><th class="col-tasks-createdby">Created by</th><th>Due</th><th>Status</th><th class="col-tasks-priority">Priority</th><th></th></tr></thead><tbody>';
     list.forEach(function (t) { html += renderTaskRow(t); });
     html += '</tbody></table></div>';
     return html;
@@ -692,7 +703,7 @@
       '<button class="link-title" data-action="toggle-task-row" data-id="' + t.id + '">' + esc(t.title) + '</button>' +
       (t.subtasks.length ? '<div class="cell-sub">' + done + "/" + t.subtasks.length + ' subtasks</div>' : '') + '</td>';
     html += '<td>' + (t.productionName ? esc(t.productionName) : '<span class="cell-sub">—</span>') + '</td>';
-    html += '<td>' + (t.assignee ? esc(t.assignee) : '<span class="cell-sub">Unassigned</span>') + '</td>';
+    html += '<td>' + (t.assignees.length ? esc(fmtAssignees(t.assignees)) : '<span class="cell-sub">Unassigned</span>') + '</td>';
     html += '<td>' + (t.createdBy ? esc(t.createdBy) : '<span class="cell-sub">—</span>') + '</td>';
     html += '<td' + (overdue ? ' style="color:var(--danger);font-weight:600;"' : '') + '>' + fmtDate(t.dueDate) + (overdue ? ' (overdue)' : '') + '</td>';
     html += '<td>' + statusPill(t.status, TASK_STATUS_TONE) + '</td>';
@@ -908,18 +919,24 @@
       html += '<select data-field="' + f.key + '"><option value="">Unassigned</option>' + STATE.team.map(function (m) {
         return '<option value="' + esc(m.name) + '"' + (m.name === val ? ' selected' : '') + '>' + esc(m.name) + '</option>';
       }).join("") + '</select>';
-    } else if (f.type === "select-user") {
+    } else if (f.type === "multiselect-user") {
       // Only people with an actual login can be assigned — always tracks the
       // current registered-user list, including people added since page load.
-      var registered = STATE.team.filter(function (m) { return m.hasLogin; });
-      var matched = !val;
-      var opts = registered.map(function (m) {
-        if (m.name === val) matched = true;
-        return '<option value="' + esc(m.name) + '"' + (m.name === val ? ' selected' : '') + '>' + esc(m.name) + '</option>';
-      }).join("");
-      if (val && !matched) opts = '<option value="' + esc(val) + '" selected>' + esc(val) + ' (no login)</option>' + opts;
-      html += '<select data-field="' + f.key + '"><option value="">Unassigned</option>' + opts + '</select>';
-      if (!registered.length) html += '<div class="field-hint">No one has a login yet — add users from the Admin page.</div>';
+      var registeredUsers = STATE.team.filter(function (m) { return m.hasLogin; });
+      html += '<div class="check-grid" data-field="' + f.key + '">' + registeredUsers.map(function (m) {
+        var checked = (val || []).indexOf(m.name) > -1;
+        return '<label class="check-pill"><input type="checkbox" value="' + esc(m.name) + '"' + (checked ? ' checked' : '') + '>' + esc(m.name) + '</label>';
+      }).join("") + '</div>';
+      if (!registeredUsers.length) html += '<div class="field-hint">No one has a login yet — add users from the Admin page.</div>';
+    } else if (f.type === "brand-select") {
+      // Type-to-select-or-add, sourced from every brand already used on a
+      // production (client) or a past expense — grows organically like crew.
+      var brandSet = {};
+      STATE.productions.forEach(function (p) { if (p.client) brandSet[p.client] = true; });
+      STATE.expenses.forEach(function (e) { if (e.brand) brandSet[e.brand] = true; });
+      var brandOptions = Object.keys(brandSet).sort();
+      html += '<input type="text" list="brand-options" data-field="' + f.key + '" placeholder="' + esc(f.placeholder || "") + '" value="' + esc(val) + '">' +
+        '<datalist id="brand-options">' + brandOptions.map(function (b) { return '<option value="' + esc(b) + '">'; }).join("") + '</datalist>';
     } else if (f.type === "select-production") {
       html += '<select data-field="' + f.key + '"><option value="">None</option>' + STATE.productions.map(function (p) {
         return '<option value="' + p.id + '"' + (String(p.id) === String(val) ? ' selected' : '') + '>' + esc(p.client + ' — ' + p.shootName) + '</option>';
@@ -1115,6 +1132,7 @@
     if (action === "filter-productions-status") { UI.statusFilter.productions = el.getAttribute("data-value"); return render(); }
     if (action === "productions-date-mode") { UI.dateFilter.productions.mode = el.getAttribute("data-value"); return render(); }
     if (action === "filter-tasks-status") { UI.statusFilter.tasks = el.getAttribute("data-value"); return render(); }
+    if (action === "filter-tasks-priority") { UI.priorityFilter.tasks = el.getAttribute("data-value"); return render(); }
     if (action === "filter-tasks-assignee") { UI.assigneeFilter.tasks = el.getAttribute("data-value"); return render(); }
 
     if (action === "cal-prev") { UI.calendar.month--; if (UI.calendar.month < 0) { UI.calendar.month = 11; UI.calendar.year--; } return render(); }
