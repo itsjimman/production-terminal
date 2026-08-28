@@ -1,4 +1,4 @@
-# ITSJIMMAN Production Hub
+# ITSJIMMAN Production Terminal
 
 A shared production-tracking app for the studio: productions, tasks, and
 per-shoot expense ledgers, backed by a real SQL database instead of a JSON

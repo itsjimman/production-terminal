@@ -1,4 +1,4 @@
-"""Shared vocabulary for the production hub — mirrors the fields the team
+"""Shared vocabulary for the production terminal — mirrors the fields the team
 already knows from the previous version, kept in one place so the API
 and the frontend never drift apart."""
 

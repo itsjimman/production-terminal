@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Sign in — ITSJIMMAN Production Hub</title>
+<title>Sign in — ITSJIMMAN Production Terminal</title>
 <script>(function(){try{var t=localStorage.getItem('ijh_theme');if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
 <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/favicon.png') }}">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -15,7 +15,7 @@
   <form class="login-card" method="post" action="{{ url_for('auth.login', next=next) }}">
     <div class="login-mark"><span class="glyph" aria-hidden="true"></span></div>
     <h1>ITSJIMMAN</h1>
-    <p class="login-sub">Production Hub</p>
+    <p class="login-sub">Production Terminal</p>
     {% if error %}<div class="login-error">{{ error }}</div>{% endif %}
     <div class="field">
       <label for="username">Username</label>
