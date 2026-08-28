@@ -46,6 +46,15 @@
     if (isNaN(d.getTime())) return iso;
     return d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
   }
+  function fmtDateTime(iso) {
+    if (!iso) return "—";
+    // Backend timestamps are naive UTC ISO strings (no "Z"/offset) — append
+    // "Z" so the browser parses them as UTC instead of local time.
+    var d = new Date(/[zZ]|[+-]\d\d:\d\d$/.test(iso) ? iso : iso + "Z");
+    if (isNaN(d.getTime())) return iso;
+    return d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) +
+      ", " + d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  }
   function fmtTime(hhmm) {
     if (!hhmm) return "";
     var parts = hhmm.split(":");
@@ -113,6 +122,7 @@
   var confirmState = null;
   var adminModal = null;
   var ADMIN_USERS = null;
+  var ADMIN_LOG = null;
   var busy = false;
 
   /* ---------- networking ---------- */
@@ -138,6 +148,7 @@
     setBusyUI(true);
     return apiCall(url, method, body).then(function (data) {
       STATE = data.state;
+      ADMIN_LOG = null; // this action just added an entry — refetch next time Admin is viewed
       busy = false;
       setBusyUI(false);
       render();
@@ -159,6 +170,7 @@
       // Keep the team list (used by every assignee/crew dropdown) in sync
       // immediately — no separate reload needed to see a newly added user.
       STATE.team = data.users.map(function (u) { return { id: u.id, name: u.name, hasLogin: u.hasLogin }; });
+      ADMIN_LOG = null; // this action just added an entry — refetch on next render
       busy = false;
       setBusyUI(false);
       render();
@@ -741,11 +753,12 @@
     }
     var html = '<div class="section-head"><div><p>Everyone who can sign in, and what they can do. Removing access keeps their name on past productions, tasks, and expenses.</p></div></div>';
     if (!ADMIN_USERS.length) { html += '<div class="table-wrap"><div class="empty-row">No team members yet.</div></div>'; return html; }
-    html += '<div class="table-wrap"><table><thead><tr><th>Name</th><th>Username</th><th>Role</th><th></th></tr></thead><tbody>';
+    html += '<div class="table-wrap"><table><thead><tr><th>Name</th><th>Username</th><th>Role</th><th>Last signed in</th><th></th></tr></thead><tbody>';
     ADMIN_USERS.forEach(function (u) {
       html += '<tr><td><div class="cell-title">' + esc(u.name) + '</div></td>';
       html += '<td>' + (u.hasLogin ? '<span class="mono">' + esc(u.username) + '</span>' : '<span class="cell-sub">No login</span>') + '</td>';
       html += '<td>' + (u.role === "super_admin" ? statusPill("Super Admin", { "Super Admin": "accent" }) : statusPill("Member", { "Member": "neutral" })) + '</td>';
+      html += '<td>' + (u.lastLoginAt ? fmtDateTime(u.lastLoginAt) : '<span class="cell-sub">Never</span>') + '</td>';
       html += '<td><div class="row-actions">';
       if (u.hasLogin) {
         html += '<button class="btn btn-sm" data-action="reset-user-password" data-id="' + u.id + '" data-name="' + esc(u.name) + '">Reset password</button>' +
@@ -756,6 +769,25 @@
       html += '</div></td></tr>';
     });
     html += '</tbody></table></div>';
+
+    html += '<div class="section-head" style="margin-top:28px;"><div><h2 style="margin:0;font-size:15px;">Changes log</h2><p>The last 200 changes made across the studio, most recent first.</p></div></div>';
+    if (ADMIN_LOG === null) {
+      loadAdminLog();
+      html += '<div class="skeleton-grid"><div class="skeleton-card"></div></div>';
+    } else if (!ADMIN_LOG.length) {
+      html += '<div class="table-wrap"><div class="empty-row">No changes recorded yet.</div></div>';
+    } else {
+      html += '<div class="table-wrap"><table><thead><tr><th>When</th><th>Who</th><th>Action</th><th>Entity</th><th>Detail</th></tr></thead><tbody>';
+      var LOG_ACTION_TONE = { created: "good", updated: "info", deleted: "danger" };
+      ADMIN_LOG.forEach(function (entry) {
+        html += '<tr><td>' + fmtDateTime(entry.createdAt) + '</td>';
+        html += '<td>' + esc(entry.actor) + '</td>';
+        html += '<td>' + statusPill(entry.action, LOG_ACTION_TONE) + '</td>';
+        html += '<td><div class="cell-title">' + esc(entry.entityLabel) + '</div><div class="cell-sub">' + esc(entry.entityType) + '</div></td>';
+        html += '<td>' + (entry.detail ? esc(entry.detail) : '<span class="cell-sub">—</span>') + '</td></tr>';
+      });
+      html += '</tbody></table></div>';
+    }
     return html;
   }
   function loadAdminUsers() {
@@ -764,6 +796,14 @@
       if (UI.tab === "admin") render();
     }).catch(function (err) {
       toast(err.message || "Couldn’t load users.", "danger");
+    });
+  }
+  function loadAdminLog() {
+    apiCall("/api/admin/audit-log", "GET").then(function (data) {
+      ADMIN_LOG = data.log;
+      if (UI.tab === "admin") render();
+    }).catch(function (err) {
+      toast(err.message || "Couldn’t load the changes log.", "danger");
     });
   }
 

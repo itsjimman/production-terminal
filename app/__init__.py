@@ -28,6 +28,7 @@ NEW_COLUMNS = {
         ("password_hash", "VARCHAR(255)"),
         ("role", "VARCHAR(20) DEFAULT 'member'"),
         ("avatar_data", "TEXT"),
+        ("last_login_at", "DATETIME"),
     ],
 }
 

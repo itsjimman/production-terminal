@@ -1,3 +1,4 @@
+from datetime import datetime
 from functools import wraps
 
 from flask import Blueprint, abort, redirect, render_template, request, session, url_for
@@ -41,6 +42,8 @@ def login():
             session["user_id"] = member.id
             session["viewer_name"] = member.name
             session["role"] = member.role
+            member.last_login_at = datetime.utcnow()
+            db.session.commit()
             return redirect(request.form.get("next") or url_for("views.overview"))
         error = "Incorrect username or password."
     return render_template("login.html", error=error, next=request.args.get("next", ""))

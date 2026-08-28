@@ -3,7 +3,7 @@ import io
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
 
-from .models import Production, Task, Subtask, Expense, TeamMember
+from .models import Production, Task, Subtask, Expense, TeamMember, AuditLog
 
 HEADER_FONT = Font(bold=True, color="FFFFFF")
 HEADER_FILL = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
@@ -75,9 +75,17 @@ def build_export_workbook():
 
     _add_sheet(
         wb, "Team Members",
-        ["ID", "Name", "Username", "Role", "Has Login", "Created At"],
-        [[m.id, m.name, m.username or "", m.role, "Yes" if m.username else "No", m.created_at.isoformat()]
+        ["ID", "Name", "Username", "Role", "Has Login", "Last Signed In", "Created At"],
+        [[m.id, m.name, m.username or "", m.role, "Yes" if m.username else "No",
+          m.last_login_at.isoformat() if m.last_login_at else "", m.created_at.isoformat()]
          for m in TeamMember.query.order_by(TeamMember.id).all()],
+    )
+
+    _add_sheet(
+        wb, "Changes Log",
+        ["ID", "When", "Who", "Action", "Entity Type", "Entity", "Detail"],
+        [[a.id, a.created_at.isoformat(), a.actor_name, a.action, a.entity_type, a.entity_label, a.detail or ""]
+         for a in AuditLog.query.order_by(AuditLog.created_at.desc()).limit(1000).all()],
     )
 
     buf = io.BytesIO()

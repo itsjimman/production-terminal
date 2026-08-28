@@ -12,7 +12,7 @@ from .constants import (
     EXPENSE_CATEGORIES, EXPENSE_STATUSES,
 )
 from .export import build_export_workbook
-from .models import db, TeamMember, Production, Task, Subtask, Expense
+from .models import db, TeamMember, Production, Task, Subtask, Expense, AuditLog
 
 bp = Blueprint("api", __name__)
 
@@ -56,6 +56,20 @@ def parse_int(v):
         return int(float(v))
     except ValueError:
         return None
+
+
+def log_change(action, entity_type, label, detail=None):
+    """Records an entry in the Super Admin-visible changes log. Doesn't
+    commit — piggybacks on the caller's own db.session.commit() so the
+    log entry and the change it describes land atomically."""
+    db.session.add(AuditLog(
+        actor_id=session.get("user_id"),
+        actor_name=session.get("viewer_name") or "Unknown",
+        action=action,
+        entity_type=entity_type,
+        entity_label=label,
+        detail=detail,
+    ))
 
 
 def get_or_create_member(name):
@@ -169,6 +183,7 @@ def create_production():
         if member:
             p.crew.append(member)
     db.session.add(p)
+    log_change("created", "Production", f"{p.client} — {p.shoot_name}")
     db.session.commit()
     return ok(201)
 
@@ -203,6 +218,7 @@ def update_production(pid):
             member = get_or_create_member(name)
             if member:
                 p.crew.append(member)
+    log_change("updated", "Production", f"{p.client} — {p.shoot_name}")
     db.session.commit()
     return ok()
 
@@ -211,7 +227,9 @@ def update_production(pid):
 @login_required
 def delete_production(pid):
     p = Production.query.get_or_404(pid)
+    label = f"{p.client} — {p.shoot_name}"
     db.session.delete(p)
+    log_change("deleted", "Production", label)
     db.session.commit()
     return ok()
 
@@ -223,7 +241,9 @@ def set_production_status(pid):
     status = (request.json or {}).get("status")
     if status not in PRODUCTION_STATUSES:
         return bad("Not a valid production status.")
+    old_status = p.status
     p.status = status
+    log_change("updated", "Production", f"{p.client} — {p.shoot_name}", detail=f"Status: {old_status} → {status}")
     db.session.commit()
     return ok()
 
@@ -247,6 +267,7 @@ def create_task():
         notes=body.get("notes") or None,
     )
     db.session.add(t)
+    log_change("created", "Task", t.title)
     db.session.commit()
     return ok(201)
 
@@ -265,6 +286,7 @@ def update_task(tid):
     t.status = body.get("status") or t.status
     t.priority = body.get("priority") or t.priority
     t.notes = body.get("notes") or None
+    log_change("updated", "Task", t.title)
     db.session.commit()
     return ok()
 
@@ -273,7 +295,9 @@ def update_task(tid):
 @login_required
 def delete_task(tid):
     t = Task.query.get_or_404(tid)
+    label = t.title
     db.session.delete(t)
+    log_change("deleted", "Task", label)
     db.session.commit()
     return ok()
 
@@ -285,7 +309,9 @@ def set_task_status(tid):
     status = (request.json or {}).get("status")
     if status not in TASK_STATUSES:
         return bad("Not a valid task status.")
+    old_status = t.status
     t.status = status
+    log_change("updated", "Task", t.title, detail=f"Status: {old_status} → {status}")
     db.session.commit()
     return ok()
 
@@ -348,6 +374,7 @@ def create_expense():
         notes=body.get("notes") or None,
     )
     db.session.add(e)
+    log_change("created", "Expense", e.description)
     db.session.commit()
     return ok(201)
 
@@ -370,6 +397,7 @@ def update_expense(eid):
     e.paid_by = get_or_create_member(body.get("paidBy"))
     e.status = body.get("status") or e.status
     e.notes = body.get("notes") or None
+    log_change("updated", "Expense", e.description)
     db.session.commit()
     return ok()
 
@@ -378,7 +406,9 @@ def update_expense(eid):
 @login_required
 def delete_expense(eid):
     e = Expense.query.get_or_404(eid)
+    label = e.description
     db.session.delete(e)
+    log_change("deleted", "Expense", label)
     db.session.commit()
     return ok()
 
@@ -390,7 +420,9 @@ def set_expense_status(eid):
     status = (request.json or {}).get("status")
     if status not in EXPENSE_STATUSES:
         return bad("Not a valid expense status.")
+    old_status = e.status
     e.status = status
+    log_change("updated", "Expense", e.description, detail=f"Status: {old_status} → {status}")
     db.session.commit()
     return ok()
 
@@ -436,6 +468,14 @@ def list_users():
     return users_ok()
 
 
+@bp.route("/admin/audit-log", methods=["GET"])
+@login_required
+@admin_required
+def get_audit_log():
+    entries = AuditLog.query.order_by(AuditLog.created_at.desc()).limit(200).all()
+    return jsonify({"ok": True, "log": [e.to_dict() for e in entries]})
+
+
 @bp.route("/admin/users", methods=["POST"])
 @login_required
 @admin_required
@@ -465,6 +505,7 @@ def create_user():
     member.username = username
     member.role = role
     member.set_password(password)
+    log_change("created", "User login", f"{member.name} ({username})", detail=f"Role: {role}")
     db.session.commit()
     return users_ok(201)
 
@@ -485,6 +526,7 @@ def remove_user(uid):
     member.username = None
     member.password_hash = None
     member.role = "member"
+    log_change("deleted", "User login", member.name, detail="Login access removed")
     db.session.commit()
     return users_ok()
 
@@ -498,6 +540,7 @@ def reset_user_password(uid):
     if len(password) < 4:
         return bad("Password must be at least 4 characters.")
     member.set_password(password)
+    log_change("updated", "User login", member.name, detail="Password reset")
     db.session.commit()
     return users_ok()
 

@@ -23,6 +23,7 @@ class TeamMember(db.Model):
     password_hash = db.Column(db.String(255), nullable=True)
     role = db.Column(db.String(20), nullable=False, default="member")  # "member" | "super_admin"
     avatar_data = db.Column(db.Text, nullable=True)  # small data: URI (JPEG, resized server-side)
+    last_login_at = db.Column(db.DateTime, nullable=True)
 
     def set_password(self, password):
         # Explicit method: Werkzeug's default ("scrypt") needs hashlib.scrypt,
@@ -43,6 +44,7 @@ class TeamMember(db.Model):
             "username": self.username,
             "role": self.role,
             "hasLogin": bool(self.username),
+            "lastLoginAt": self.last_login_at.isoformat() if self.last_login_at else None,
         }
 
     def to_profile_dict(self):
@@ -187,5 +189,27 @@ class Expense(db.Model):
             "paidBy": self.paid_by.name if self.paid_by else "",
             "status": self.status,
             "notes": self.notes,
+            "createdAt": self.created_at.isoformat(),
+        }
+
+
+class AuditLog(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    actor_id = db.Column(db.Integer, db.ForeignKey("team_member.id", ondelete="SET NULL"), nullable=True)
+    actor_name = db.Column(db.String(120), nullable=False)  # snapshot — survives the actor losing login access
+    action = db.Column(db.String(20), nullable=False)  # "created" | "updated" | "deleted"
+    entity_type = db.Column(db.String(40), nullable=False)
+    entity_label = db.Column(db.String(240), nullable=False)
+    detail = db.Column(db.String(300), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "actor": self.actor_name,
+            "action": self.action,
+            "entityType": self.entity_type,
+            "entityLabel": self.entity_label,
+            "detail": self.detail,
             "createdAt": self.created_at.isoformat(),
         }
