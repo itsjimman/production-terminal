@@ -527,7 +527,7 @@
       return html;
     }
 
-    html += '<div class="table-wrap"><table><thead><tr>' +
+    html += '<div class="table-wrap"><table class="tbl-productions"><thead><tr>' +
       '<th class="col-production">Production</th><th class="col-status">Status</th><th class="col-date">Shoot date</th><th class="col-crew">Crew</th><th class="col-links">Links</th><th></th>' +
       '</tr></thead><tbody>';
     list.forEach(function (p) { html += renderProductionRow(p); });
@@ -670,7 +670,7 @@
 
     if (!list.length) { html += '<div class="table-wrap" style="margin-top:14px;"><div class="empty-row">No tasks match.</div></div>'; return html; }
 
-    html += '<div class="table-wrap" style="margin-top:14px;"><table><thead><tr><th>Task</th><th>Production</th><th>Assignee</th><th>Created by</th><th>Due</th><th>Status</th><th>Priority</th><th></th></tr></thead><tbody>';
+    html += '<div class="table-wrap" style="margin-top:14px;"><table class="tbl-tasks"><thead><tr><th>Task</th><th class="col-tasks-production">Production</th><th>Assignee</th><th class="col-tasks-createdby">Created by</th><th>Due</th><th>Status</th><th class="col-tasks-priority">Priority</th><th></th></tr></thead><tbody>';
     list.forEach(function (t) { html += renderTaskRow(t); });
     html += '</tbody></table></div>';
     return html;
@@ -753,7 +753,7 @@
     }
     var html = '<div class="section-head"><div><p>Everyone who can sign in, and what they can do. Removing access keeps their name on past productions, tasks, and expenses.</p></div></div>';
     if (!ADMIN_USERS.length) { html += '<div class="table-wrap"><div class="empty-row">No team members yet.</div></div>'; return html; }
-    html += '<div class="table-wrap"><table><thead><tr><th>Name</th><th>Username</th><th>Role</th><th>Last signed in</th><th></th></tr></thead><tbody>';
+    html += '<div class="table-wrap"><table class="tbl-admin-users"><thead><tr><th>Name</th><th>Username</th><th>Role</th><th>Last signed in</th><th></th></tr></thead><tbody>';
     ADMIN_USERS.forEach(function (u) {
       html += '<tr><td><div class="cell-title">' + esc(u.name) + '</div></td>';
       html += '<td>' + (u.hasLogin ? '<span class="mono">' + esc(u.username) + '</span>' : '<span class="cell-sub">No login</span>') + '</td>';
@@ -777,7 +777,7 @@
     } else if (!ADMIN_LOG.length) {
       html += '<div class="table-wrap"><div class="empty-row">No changes recorded yet.</div></div>';
     } else {
-      html += '<div class="table-wrap"><table><thead><tr><th>When</th><th>Who</th><th>Action</th><th>Entity</th><th>Detail</th></tr></thead><tbody>';
+      html += '<div class="table-wrap"><table class="tbl-audit-log"><thead><tr><th>When</th><th>Who</th><th>Action</th><th>Entity</th><th>Detail</th></tr></thead><tbody>';
       var LOG_ACTION_TONE = { created: "good", updated: "info", deleted: "danger" };
       ADMIN_LOG.forEach(function (entry) {
         html += '<tr><td>' + fmtDateTime(entry.createdAt) + '</td>';

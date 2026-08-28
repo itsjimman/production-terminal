@@ -67,17 +67,19 @@ h1,h2,h3,.display{
 .mono{ font-family:'IBM Plex Mono', ui-monospace, monospace; font-variant-numeric:tabular-nums; }
 a{ color:var(--info); }
 button{ font-family:inherit; }
+button, .tab-btn, .btn, .icon-btn, .chip-filter, .cal-chip, .link-title{ touch-action:manipulation; }
+.table-wrap{ -webkit-overflow-scrolling:touch; }
 ::selection{ background:var(--accent-soft); }
 ::-webkit-scrollbar{ width:10px; height:10px; }
 ::-webkit-scrollbar-thumb{ background:var(--border); border-radius:8px; }
 ::-webkit-scrollbar-track{ background:transparent; }
 @media (prefers-reduced-motion: reduce){ *{ animation-duration:.001ms !important; transition-duration:.001ms !important; } }
 
-.app{ display:grid; grid-template-columns:220px 1fr; min-height:100vh; }
+.app{ display:grid; grid-template-columns:220px 1fr; min-height:100vh; min-height:100dvh; align-content:start; }
 .rail{
   background:var(--surface-2); border-right:1px solid var(--border);
   display:flex; flex-direction:column; padding:20px 14px; gap:4px;
-  position:sticky; top:0; height:100vh; overflow-y:auto;
+  position:sticky; top:0; height:100vh; height:100dvh; overflow-y:auto;
 }
 .rail-brand{ display:flex; align-items:center; gap:10px; padding:2px 8px 18px; margin-bottom:10px; border-bottom:1px solid var(--border); }
 .rail-brand .mark{ width:34px; height:34px; border-radius:9px; background:#FFFFFF; border:1px solid var(--border); display:flex; align-items:center; justify-content:center; flex:none; box-shadow:var(--shadow-sm); }
@@ -121,7 +123,7 @@ button{ font-family:inherit; }
 .theme-toggle-btn:hover{ background:var(--surface-3); color:var(--text); }
 .theme-toggle-btn svg{ flex:none; }
 
-select, input[type=text], input[type=date], input[type=url], input[type=number], input[type=search], input[type=password], textarea{
+select, input[type=text], input[type=date], input[type=time], input[type=url], input[type=number], input[type=search], input[type=password], textarea{
   font-family:inherit; font-size:13px; color:var(--text); background:var(--surface);
   border:1px solid var(--border); border-radius:8px; padding:8px 10px; width:100%;
   transition:border-color .12s var(--ease), box-shadow .12s var(--ease);
@@ -314,7 +316,11 @@ tr.expand-row td{ background:var(--surface-2); padding:0 !important; }
 .skeleton-card{ height:78px; border-radius:var(--radius-md); background:linear-gradient(100deg, var(--surface-2) 30%, var(--surface-3) 50%, var(--surface-2) 70%); background-size:200% 100%; animation:shimmer 1.3s infinite; border:1px solid var(--border); }
 @keyframes shimmer{ from{ background-position:150% 0; } to{ background-position:-50% 0; } }
 
-.login-body{ margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center; background:var(--bg); font-family:'IBM Plex Sans',sans-serif; }
+.login-body{
+  margin:0; min-height:100vh; min-height:100dvh; display:flex; align-items:center; justify-content:center;
+  background:var(--bg); font-family:'IBM Plex Sans',sans-serif; padding:20px;
+  padding-top:max(20px, env(safe-area-inset-top)); padding-bottom:max(20px, env(safe-area-inset-bottom));
+}
 .login-card{ background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); box-shadow:var(--shadow-lg); padding:32px 28px; width:100%; max-width:340px; display:flex; flex-direction:column; align-items:center; gap:6px; }
 .login-mark{ width:56px; height:56px; border-radius:14px; background:#FFFFFF; border:1px solid var(--border); margin-bottom:8px; box-shadow:var(--shadow-sm); display:flex; align-items:center; justify-content:center; }
 .login-mark .glyph{
@@ -332,15 +338,49 @@ tr.expand-row td{ background:var(--surface-2); padding:0 !important; }
 
 .rail-toggle{ display:none; }
 @media (max-width:820px){
+  :root{ --rail-h:52px; }
   .app{ grid-template-columns:1fr; }
-  .rail{ position:sticky; top:0; height:auto; flex-direction:row; align-items:center; overflow-x:auto; padding:10px 12px; gap:6px; z-index:6; }
-  .rail-brand{ border-bottom:none; padding:0 8px 0 0; margin:0; }
-  .rail-foot{ margin:0 0 0 auto; padding:0; border-top:none; flex:none; flex-direction:row; align-items:center; }
+  .rail{
+    position:sticky; top:0; height:var(--rail-h); flex-direction:row; align-items:center;
+    overflow-x:auto; overflow-y:hidden; flex-wrap:nowrap; padding:8px 12px; gap:6px; z-index:6;
+    padding-left:max(12px, env(safe-area-inset-left)); padding-right:max(12px, env(safe-area-inset-right));
+  }
+  .rail-brand{ border-bottom:none; padding:0 8px 0 0; margin:0; flex:none; }
+  .rail-brand .sub{ display:none; }
+  #tabs{ display:flex; flex-direction:row; flex-wrap:nowrap; gap:6px; flex:none; }
+  .rail-foot{ margin:0 0 0 auto; padding:0; border-top:none; flex:none; flex-direction:row; align-items:center; gap:8px; }
   .viewer-display{ display:none; }
   .theme-toggle-btn span{ display:none; }
-  .tab-btn{ width:auto; }
+  .theme-toggle-btn{ padding:8px; }
+  .tab-btn{ width:auto; padding:8px 11px; white-space:nowrap; }
   .tab-count{ display:none; }
-  .content{ padding:16px; }
+  .rail-logout{ white-space:nowrap; padding:8px 2px; }
+  .topbar{ top:var(--rail-h); padding:12px 16px; flex-wrap:wrap; }
+  .content{ padding:16px; padding-left:max(16px, env(safe-area-inset-left)); padding-right:max(16px, env(safe-area-inset-right)); }
   .search-wrap{ width:150px; }
   .two-col{ grid-template-columns:1fr; }
+
+  /* iOS Safari zooms the page on focusing an input smaller than 16px */
+  select, input[type=text], input[type=date], input[type=time], input[type=url],
+  input[type=number], input[type=search], input[type=password], textarea{ font-size:16px; }
+
+  /* Bigger touch targets */
+  .icon-btn{ padding:9px; }
+  .btn{ padding:9px 14px; }
+  .btn-sm{ padding:7px 11px; }
+  .chip-filter{ padding:7px 13px; }
+}
+@media (max-width:600px){
+  /* Trim less-critical columns — full detail is still one tap away via row expand */
+  .tbl-productions td:nth-child(4), .tbl-productions th:nth-child(4),
+  .tbl-productions td:nth-child(5), .tbl-productions th:nth-child(5){ display:none; }
+  .tbl-tasks td:nth-child(4), .tbl-tasks th:nth-child(4),
+  .tbl-tasks td:nth-child(7), .tbl-tasks th:nth-child(7){ display:none; }
+  .tbl-admin-users td:nth-child(2), .tbl-admin-users th:nth-child(2){ display:none; }
+  .tbl-audit-log td:nth-child(5), .tbl-audit-log th:nth-child(5){ display:none; }
+  .cal-cell, .cal-cell-empty{ min-height:44px; padding:4px; }
+  .cal-dow{ padding:6px 2px; font-size:9.5px; }
+  .stat-card .num{ font-size:24px; }
+  .toast-stack{ left:12px; right:12px; align-items:stretch; bottom:max(18px, env(safe-area-inset-bottom)); }
+  .toast{ max-width:none; }
 }
