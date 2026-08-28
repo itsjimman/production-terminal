@@ -568,6 +568,10 @@
           facts.map(function (f) { return '<div><div class="flabel">' + esc(f[0]) + '</div>' + esc(f[1]) + '</div>'; }).join("") +
           '</div></div>';
       }
+      if (p.notes) {
+        row += '<div class="panel detail-info" style="margin-bottom:14px;padding:14px 16px;"><div class="flabel">Notes</div>' +
+          '<div style="white-space:pre-wrap;">' + esc(p.notes) + '</div></div>';
+      }
       row += '<div class="two-col">';
       row += renderProductionTasksPanel(p.id);
       row += renderExpensesPanel(p.id, p.budget);
@@ -593,6 +597,7 @@
       html += statusPill(t.status, TASK_STATUS_TONE);
       html += '<div class="row-actions">' + completeBtn("toggle-task-done", t.id, t.status === "Done") + '<button class="icon-btn" title="Edit" data-action="edit-task" data-id="' + t.id + '">' + ICONS.edit + '</button><button class="icon-btn" title="Delete" data-action="delete-task" data-id="' + t.id + '">' + ICONS.trash + '</button></div>';
       html += '</div>';
+      if (t.notes) html += '<div class="cell-sub" style="width:100%;white-space:pre-wrap;">' + esc(t.notes) + '</div>';
       html += renderSubtasksBlock(t);
       html += '</li>';
     });
@@ -628,7 +633,9 @@
       '</div></div>';
     if (!list.length) { html += '<div class="empty-row">No expenses logged yet.</div></div>'; return html; }
     html += '<ul class="mini-list">' + list.map(function (e) {
-      return '<li><div class="t"><div class="name">' + esc(e.description) + '</div><div class="meta">' + esc(e.category) + ' · ' + fmtMoney(e.amount) + ' · ' + fmtDate(e.date) + (e.paidBy ? ' · paid by ' + esc(e.paidBy) : '') + '</div></div>' +
+      return '<li style="flex-wrap:wrap;">' +
+        '<div class="t"><div class="name">' + esc(e.description) + '</div><div class="meta">' + esc(e.category) + ' · ' + fmtMoney(e.amount) + ' · ' + fmtDate(e.date) + (e.paidBy ? ' · paid by ' + esc(e.paidBy) : '') + '</div>' +
+        (e.notes ? '<div class="meta" style="white-space:pre-wrap;">' + esc(e.notes) + '</div>' : '') + '</div>' +
         statusPill(e.status, EXPENSE_STATUS_TONE) +
         '<div class="row-actions">' + completeBtn("toggle-expense-paid", e.id, e.status === "Paid", "Mark paid", "Mark unpaid") + '<button class="icon-btn" title="Edit" data-action="edit-expense" data-id="' + e.id + '">' + ICONS.edit + '</button><button class="icon-btn" title="Delete" data-action="delete-expense" data-id="' + e.id + '">' + ICONS.trash + '</button></div></li>';
     }).join("") + '</ul></div>';
@@ -692,7 +699,8 @@
     html += '<td>' + statusPill(t.priority || "Normal", TASK_PRIORITY_TONE) + '</td>';
     html += '<td><div class="row-actions">' + completeBtn("toggle-task-done", t.id, t.status === "Done") + '<button class="icon-btn" title="Edit" data-action="edit-task" data-id="' + t.id + '">' + ICONS.edit + '</button><button class="icon-btn" title="Delete" data-action="delete-task" data-id="' + t.id + '">' + ICONS.trash + '</button></div></td></tr>';
     if (open) {
-      html += '<tr class="expand-row"><td colspan="8"><div class="expand-body">' + renderSubtasksBlock(t) + '</div></td></tr>';
+      var notesHtml = t.notes ? '<div style="white-space:pre-wrap;margin-bottom:10px;">' + esc(t.notes) + '</div>' : '';
+      html += '<tr class="expand-row"><td colspan="8"><div class="expand-body">' + notesHtml + renderSubtasksBlock(t) + '</div></td></tr>';
     }
     return html;
   }
@@ -968,6 +976,11 @@
       var input = document.querySelector('[data-role="crew-add-input"]');
       var name = (input.value || "").trim();
       if (!name) return;
+      // Capture whatever's currently typed in the other fields first — the
+      // rebuild below replaces the whole modal's innerHTML, and modalState.values
+      // is otherwise only synced on submit, so typed-but-unsaved text would
+      // otherwise be silently wiped out.
+      modalState.values = collectFormValues(entityConfig(modalState.entity), modalState.values);
       modalState.pendingCrew = modalState.pendingCrew || [];
       modalState.pendingCrew.push(name);
       renderOverlay();
@@ -976,8 +989,9 @@
   function bindConfirmEvents() {
     document.querySelectorAll('[data-action="overlay-close"]').forEach(function (el) { el.addEventListener("click", function () { confirmState = null; renderOverlay(); }); });
     document.querySelectorAll('[data-stop]').forEach(function (el) { el.addEventListener("click", function (e) { e.stopPropagation(); }); });
-    var closeBtn = document.querySelector('[data-action="confirm-close"]');
-    if (closeBtn) closeBtn.addEventListener("click", function () { confirmState = null; renderOverlay(); });
+    document.querySelectorAll('[data-action="confirm-close"]').forEach(function (el) {
+      el.addEventListener("click", function () { confirmState = null; renderOverlay(); });
+    });
     var yesBtn = document.querySelector('[data-action="confirm-yes"]');
     if (yesBtn) yesBtn.addEventListener("click", doDelete);
   }
