@@ -1,0 +1,33 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "itsjimman-production-terminal",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-15",
+
+  // The Flask app, built from ./Dockerfile and run as a Cloudflare Container.
+  "containers": [
+    {
+      "class_name": "ProductionTerminalContainer",
+      "image": "./Dockerfile",
+      "max_instances": 1,
+      "instance_type": "basic"
+    }
+  ],
+
+  // The Worker talks to the container through this Durable Object binding.
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "PRODUCTION_TERMINAL",
+        "class_name": "ProductionTerminalContainer"
+      }
+    ]
+  },
+
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["ProductionTerminalContainer"]
+    }
+  ]
+}
