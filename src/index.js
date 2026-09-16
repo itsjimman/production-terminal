@@ -7,7 +7,13 @@ import { Container, getContainer } from "@cloudflare/containers";
 // gunicorn's single worker process simple.
 export class ProductionTerminalContainer extends Container {
   defaultPort = 8080;
-  sleepAfter = "10m";
+  // Usage is sporadic (a handful of requests/hour from a small team), so a
+  // short sleep window meant almost every visit was a cold start — the
+  // container waking up and booting gunicorn/Flask from scratch, which is
+  // most of why the app felt slow. A longer window keeps it warm across
+  // normal gaps between visits during the day, at the cost of a bit more
+  // idle compute time (negligible for how lightly this is used).
+  sleepAfter = "1h";
 
   // Flask reads DATABASE_URL and SECRET_KEY from its process environment
   // (see app/config.py). Both are set as Worker secrets (wrangler secret
@@ -37,7 +43,7 @@ export default {
     // Waiting for the port explicitly first — with a generous timeout that
     // covers a cold container-image pull plus gunicorn/Flask boot — makes
     // cold starts a bit slower but reliable instead of occasionally failing
-    // outright. Once warm (sleepAfter is 10m), this resolves immediately.
+    // outright. Once warm (sleepAfter is 1h), this resolves immediately.
     await container.startAndWaitForPorts({
       cancellationOptions: { portReadyTimeoutMS: 30_000 },
     });
