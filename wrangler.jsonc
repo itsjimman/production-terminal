@@ -29,5 +29,12 @@
       "tag": "v1",
       "new_sqlite_classes": ["ProductionTerminalContainer"]
     }
-  ]
+  ],
+
+  // Streams the Worker's own logs, and container start/stop/crash events,
+  // to the dashboard's Logs tab — turned on temporarily to debug the
+  // container startup failures we're chasing.
+  "observability": {
+    "enabled": true
+  }
 }
