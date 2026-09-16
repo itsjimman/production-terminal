@@ -1,3 +1,5 @@
+import os
+
 from flask import Flask
 from sqlalchemy import event, inspect, text
 from sqlalchemy.engine import Engine
@@ -113,14 +115,23 @@ def create_app(config_class=Config):
     app.register_blueprint(views_bp)
     app.register_blueprint(api_bp, url_prefix="/api")
 
-    with app.app_context():
-        db.create_all()
-        _migrate_add_columns(app)
-        _migrate_data(app)
-        if TeamMember.query.count() == 0:
-            for name in TEAM_DEFAULT:
-                db.session.add(TeamMember(name=name))
-            db.session.commit()
-        _bootstrap_super_admin(app)
+    # These startup checks run a dozen-plus sequential queries (table/column
+    # introspection, additive migrations, bootstrap checks) — cheap against a
+    # local SQLite file, but each one is a real network round trip against D1
+    # over its REST API. On a platform that only waits ~20s for the container
+    # to open its port (Cloudflare Containers), that's enough to blow the
+    # startup deadline. Set SKIP_STARTUP_MIGRATIONS=1 wherever the schema is
+    # already known-correct (e.g. it was provisioned by hand, as it was for
+    # the Cloudflare/D1 deployment) to skip straight past all of it.
+    if not os.environ.get("SKIP_STARTUP_MIGRATIONS"):
+        with app.app_context():
+            db.create_all()
+            _migrate_add_columns(app)
+            _migrate_data(app)
+            if TeamMember.query.count() == 0:
+                for name in TEAM_DEFAULT:
+                    db.session.add(TeamMember(name=name))
+                db.session.commit()
+            _bootstrap_super_admin(app)
 
     return app

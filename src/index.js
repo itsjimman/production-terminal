@@ -18,6 +18,12 @@ export class ProductionTerminalContainer extends Container {
     this.envVars = {
       DATABASE_URL: env.DATABASE_URL,
       SECRET_KEY: env.SECRET_KEY,
+      // The D1 schema was provisioned by hand and is already known-correct,
+      // so skip the app's startup migration/introspection checks — each one
+      // is a real REST round trip to D1, and enough of them in sequence can
+      // blow past how long Cloudflare waits for the container's port to
+      // open. See app/__init__.py for the flag itself.
+      SKIP_STARTUP_MIGRATIONS: "1",
     };
   }
 }
