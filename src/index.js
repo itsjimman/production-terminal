@@ -31,6 +31,16 @@ export class ProductionTerminalContainer extends Container {
 export default {
   async fetch(request, env) {
     const container = getContainer(env.PRODUCTION_TERMINAL, "default");
+    // container.fetch() alone races the container's own startup: on a cold
+    // start (container was asleep) it can throw "container is not running"
+    // even though the container goes on to boot successfully moments later.
+    // Waiting for the port explicitly first — with a generous timeout that
+    // covers a cold container-image pull plus gunicorn/Flask boot — makes
+    // cold starts a bit slower but reliable instead of occasionally failing
+    // outright. Once warm (sleepAfter is 10m), this resolves immediately.
+    await container.startAndWaitForPorts({
+      cancellationOptions: { portReadyTimeoutMS: 30_000 },
+    });
     return container.fetch(request);
   },
 };
